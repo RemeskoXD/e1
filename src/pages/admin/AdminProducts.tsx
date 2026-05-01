@@ -482,7 +482,7 @@ export default function AdminProducts() {
                   <input
                     required
                     type="text"
-                    value={formData.title}
+                    value={formData.title || ''}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
                   />
@@ -491,7 +491,7 @@ export default function AdminProducts() {
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Kategorie</label>
                   <select
                     required
-                    value={formData.category}
+                    value={formData.category || ''}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
                   >
@@ -576,7 +576,7 @@ export default function AdminProducts() {
                   <input
                     required
                     type="text"
-                    value={formData.img}
+                    value={formData.img || ''}
                     onChange={(e) => setFormData({ ...formData, img: e.target.value })}
                     placeholder="https://..."
                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
@@ -587,7 +587,7 @@ export default function AdminProducts() {
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Popis produktu</label>
                 <textarea
                   required
-                  value={formData.desc}
+                  value={formData.desc || ''}
                   onChange={(e) => setFormData({ ...formData, desc: e.target.value })}
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all h-32"
                 />

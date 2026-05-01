@@ -29,7 +29,7 @@ type QuoteRes = {
   dimension_constraints?: Product['dimension_constraints'];
 };
 
-export default function ProductDetail({ productId }: { productId: number }) {
+export default function ProductDetail({ productId }: { productId: string }) {
   const { addLine } = useCart();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,7 +55,7 @@ export default function ProductDetail({ productId }: { productId: number }) {
           setError('Nepodařilo se načíst produkt.');
           return;
         }
-        const p = (data as Product[]).find((x) => Number(x.id) === productId);
+        const p = (data as Product[]).find((x) => String(x.id) === productId);
         if (!p) {
           setError('Produkt nenalezen.');
           return;

@@ -4,7 +4,7 @@ const STORAGE_KEY = 'qapi_cart_v1';
 
 export type CartLine = {
   key: string;
-  productId: number;
+  productId: number | string;
   title: string;
   img: string;
   category: string;
@@ -39,7 +39,7 @@ function loadStored(): CartLine[] {
         x &&
         typeof x === 'object' &&
         typeof (x as CartLine).key === 'string' &&
-        typeof (x as CartLine).productId === 'number'
+        (typeof (x as CartLine).productId === 'number' || typeof (x as CartLine).productId === 'string')
     );
   } catch {
     return [];

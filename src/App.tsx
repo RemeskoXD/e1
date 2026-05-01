@@ -27,11 +27,10 @@ import AdminMeasureGuide from './pages/admin/AdminMeasureGuide';
 import MeasureGuidePage from './pages/MeasureGuidePage';
 import AboutPage from './pages/AboutPage';
 
-function parseProductId(path: string): number | null {
-  const m = path.match(/^#\/produkt\/(\d+)/);
+function parseProductId(path: string): string | null {
+  const m = path.match(/^#\/produkt\/(.+)/);
   if (!m) return null;
-  const n = Number(m[1]);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  return m[1];
 }
 
 function parseAdminOrderId(path: string): number | null {
