@@ -2,6 +2,7 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { Plus, Search, Edit2, Trash2, Terminal, ChevronDown, ChevronRight, X, ExternalLink } from 'lucide-react';
 import { computeDisplayPriceCzk, formatCzk, toMoneyNumber } from '../../lib/money';
 import { CENIK_IMPORT_COMMANDS } from '../../lib/cenikImportCommands';
+import RichTextEditor from '../../components/RichTextEditor';
 
 interface DimConstraints {
   width_mm_min: number;
@@ -585,12 +586,12 @@ export default function AdminProducts() {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Popis produktu</label>
-                <textarea
-                  required
-                  value={formData.desc || ''}
-                  onChange={(e) => setFormData({ ...formData, desc: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all h-32"
-                />
+                <div className="border-t border-b sm:border border-gray-200 sm:rounded-lg overflow-hidden bg-white">
+                  <RichTextEditor
+                    value={formData.desc || ''}
+                    onChange={(val) => setFormData({ ...formData, desc: val })}
+                  />
+                </div>
               </div>
 
               <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/80">

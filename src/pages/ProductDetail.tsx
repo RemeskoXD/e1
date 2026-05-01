@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ShoppingCart } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { formatCzk } from '../lib/money';
+import { sanitizeGuideHtml } from '../lib/measureGuide';
 
 type Product = {
   id: number;
@@ -187,7 +188,10 @@ export default function ProductDetail({ productId }: { productId: string }) {
             {product.category}
           </span>
           <h1 className="text-3xl font-extrabold text-[#132333] mt-2 mb-4">{product.title}</h1>
-          <p className="text-gray-600 mb-8 whitespace-pre-line">{product.desc}</p>
+          <div 
+            className="prose prose-sm sm:prose-base prose-gray max-w-none mb-8 tiptap"
+            dangerouslySetInnerHTML={{ __html: sanitizeGuideHtml(product.desc || '') }}
+          />
 
           {dim && (
             <p className="text-sm text-gray-500 mb-4">
