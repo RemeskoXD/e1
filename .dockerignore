@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.gitignore
+*.md
+!DEPLOY.md
+.env
+.env.*
+!.env.example
+.cursor
+agent-transcripts
+coverage
+*.log
+.DS_Store
