@@ -9,14 +9,15 @@ import path from "path";
 import { PDFParse } from "pdf-parse";
 import { Pool } from "pg";
 import { parseFirstIsolineMatrix } from "./parse-isoline-matrix.mjs";
+import { downloadOrReadFileBuffer } from "./download-or-read-file.mjs";
 
 const PDF_DEFAULT =
   process.env.CENIK_PDF_PATH ||
-  "C:/Users/ludvi/Desktop/Qapieshop/Katalogy/01_CENIK_horizontalni_zaluzie.pdf";
+  "https://web2.itnahodinu.cz/qapieshop/Katalogy/01_CENIK_horizontalni_zaluzie.pdf";
 
 const PRODUCT_TITLE = "Horizontální žaluzie ISOLINE — řetízkové ovládání";
 const LEGACY_TITLE = "Horizontální žaluzie ISOLINE (ceník PDF 01)";
-const PRODUCT_CATEGORY = "Interiérové stínění";
+const PRODUCT_CATEGORY = "cat_interier";
 const IMG_DEFAULT =
   "https://web2.itnahodinu.cz/qapieshop/Obrázky/Interiérové%20stínění/Horizontální%20žaluzie/menu-zaluzie.jpg";
 
@@ -29,7 +30,7 @@ const DIM = {
 };
 
 async function readPdfText(pdfPath) {
-  const buf = fs.readFileSync(pdfPath);
+  const buf = await downloadOrReadFileBuffer(pdfPath);
   const parser = new PDFParse({ data: buf });
   const tr = await parser.getText();
   await parser.destroy();
@@ -49,8 +50,9 @@ async function ensureProductColumns(client) {
 }
 
 async function main() {
-  const pdfPath = path.resolve(process.argv[2] || PDF_DEFAULT);
-  if (!fs.existsSync(pdfPath)) {
+  const inputArg = process.argv[2] || PDF_DEFAULT;
+  const pdfPath = inputArg.startsWith("http") ? inputArg : path.resolve(inputArg);
+  if (!inputArg.startsWith("http") && !fs.existsSync(pdfPath)) {
     console.error("Soubor neexistuje:", pdfPath);
     process.exit(1);
   }
@@ -75,15 +77,15 @@ async function main() {
   try {
     await client.query(`
       CREATE TABLE IF NOT EXISTS "Product" (
-        id SERIAL PRIMARY KEY,
-        title VARCHAR(255) NOT NULL,
-        category VARCHAR(255),
-        price INTEGER,
-        "oldPrice" INTEGER,
-        badge VARCHAR(50),
-        img TEXT,
-        "desc" TEXT
-      );
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      "categoryId" TEXT,
+      "priceCzk" INTEGER,
+      "oldPrice" INTEGER,
+      badge VARCHAR(50),
+      image TEXT,
+      description TEXT
+    );
     `);
     await client
       .query(
@@ -99,7 +101,7 @@ async function main() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS "ProductPriceBracket" (
         id SERIAL PRIMARY KEY,
-        product_id INTEGER NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
+        product_id TEXT NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
         width_mm_max INTEGER NOT NULL,
         height_mm_max INTEGER NOT NULL,
         base_price_czk INTEGER NOT NULL,
@@ -109,9 +111,9 @@ async function main() {
 
     const desc = `Horizontální žaluzie ISOLINE s ovládáním řetízkem. Ceny v tabulce jsou v Kč bez DPH (21 %). Zaokrouhlení rozměrů při výpočtu: k nejbližšímu vyššímu tabulkovému rozměru (viz ceník). Garantované rozměry: šířka ${DIM.width_mm_min}–${DIM.width_mm_max} mm, výška ${DIM.height_mm_min}–${DIM.height_mm_max} mm, max. plocha ${DIM.max_area_m2} m². Varianty PRIM a ECO jsou v dalších tabulkách stejného PDF.`;
 
-    let existing = await client.query(`SELECT id FROM "Product" WHERE title = $1`, [PRODUCT_TITLE]);
+    let existing = await client.query(`SELECT id FROM "Product" WHERE name = $1`, [PRODUCT_TITLE]);
     if (!existing.rows[0]) {
-      existing = await client.query(`SELECT id FROM "Product" WHERE title = $1`, [LEGACY_TITLE]);
+      existing = await client.query(`SELECT id FROM "Product" WHERE name = $1`, [LEGACY_TITLE]);
     }
 
     let productId;
@@ -119,7 +121,7 @@ async function main() {
       productId = existing.rows[0].id;
       await client.query(`DELETE FROM "ProductPriceBracket" WHERE product_id = $1`, [productId]);
       await client.query(
-        `UPDATE "Product" SET title=$2, category=$3, price=$4, img=$5, "desc"=$6,
+        `UPDATE "Product" SET name=$2, "categoryId"=$3, "priceCzk"=$4, image=$5, description=$6,
           supplier_markup_percent = 4.9, badge = $7,
           width_mm_min=$8, width_mm_max=$9, height_mm_min=$10, height_mm_max=$11, max_area_m2=$12
          WHERE id = $1`,
@@ -141,9 +143,9 @@ async function main() {
       console.log("Aktualizuji produkt id=", productId);
     } else {
       const ins = await client.query(
-        `INSERT INTO "Product" (title, category, price, "oldPrice", badge, img, "desc", supplier_markup_percent, commission_percent,
+        `INSERT INTO "Product" (id, name, "categoryId", "priceCzk", "oldPrice", badge, image, description, supplier_markup_percent, commission_percent,
           width_mm_min, width_mm_max, height_mm_min, height_mm_max, max_area_m2)
-         VALUES ($1, $2, $3, NULL, $4, $5, $6, 4.9, 0, $7, $8, $9, $10, $11) RETURNING id`,
+         VALUES ('prd_' || substr(md5(random()::text), 1, 10), $1, $2, $3, NULL, $4, $5, $6, 4.9, 0, $7, $8, $9, $10, $11) RETURNING id`,
         [
           PRODUCT_TITLE,
           PRODUCT_CATEGORY,
@@ -166,7 +168,7 @@ async function main() {
       const b = brackets[i];
       await client.query(
         `INSERT INTO "ProductPriceBracket" (product_id, width_mm_max, height_mm_max, base_price_czk, sort_order)
-         VALUES ($1, $2, $3, $4, $5)`,
+         VALUES ( $1, $2, $3, $4, $5)`,
         [productId, b.width_mm_max, b.height_mm_max, b.base_price_czk, i]
       );
     }

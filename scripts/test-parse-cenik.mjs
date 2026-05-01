@@ -1,9 +1,10 @@
 import fs from "fs";
 import { PDFParse } from "pdf-parse";
 import { parseFirstIsolineMatrix } from "./parse-isoline-matrix.mjs";
+import { downloadOrReadFileBuffer } from "./download-or-read-file.mjs";
 
-const p = process.argv[2] || "C:/Users/ludvi/Desktop/Qapieshop/Katalogy/01_CENIK_horizontalni_zaluzie.pdf";
-const buf = fs.readFileSync(p);
+const p = process.argv[2] || "https://web2.itnahodinu.cz/qapieshop/Katalogy/01_CENIK_horizontalni_zaluzie.pdf";
+const buf = await downloadOrReadFileBuffer(p);
 const parser = new PDFParse({ data: buf });
 const tr = await parser.getText();
 await parser.destroy();

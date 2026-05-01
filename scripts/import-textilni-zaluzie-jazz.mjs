@@ -35,14 +35,14 @@ function dimsForSkupina(g) {
 async function ensureSchema(client) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS "Product" (
-      id SERIAL PRIMARY KEY,
-      title VARCHAR(255) NOT NULL,
-      category VARCHAR(255),
-      price INTEGER,
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      "categoryId" TEXT,
+      "priceCzk" INTEGER,
       "oldPrice" INTEGER,
       badge VARCHAR(50),
-      img TEXT,
-      "desc" TEXT
+      image TEXT,
+      description TEXT
     );
   `);
   for (const sql of [
@@ -62,7 +62,7 @@ async function ensureSchema(client) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS "ProductPriceBracket" (
       id SERIAL PRIMARY KEY,
-      product_id INTEGER NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
       width_mm_max INTEGER NOT NULL,
       height_mm_max INTEGER NOT NULL,
       base_price_czk INTEGER NOT NULL,
@@ -85,13 +85,13 @@ async function upsertSkupina(client, groupNum) {
     `Výrobní omezení: nesmí současně přesáhnout šířka i výška 1 950 mm; při šířce nad 1 950 mm je výška max. 1 850 mm. ` +
     `Pro kontrolu max. rozměrů konkrétní látky lze v API u quote zaslat pole „fabric“ nebo „latka“.`;
 
-  const r = await client.query(`SELECT id FROM "Product" WHERE title = $1`, [title]);
+  const r = await client.query(`SELECT id FROM "Product" WHERE name = $1`, [title]);
   let id;
   if (r.rows[0]) {
     id = r.rows[0].id;
     await client.query(`DELETE FROM "ProductPriceBracket" WHERE product_id = $1`, [id]);
     await client.query(
-      `UPDATE "Product" SET category=$2, price=$3, img=$4, "desc"=$5, badge=$6,
+      `UPDATE "Product" SET "categoryId"=$2, "priceCzk"=$3, image=$4, description=$5, badge=$6,
         supplier_markup_percent = 4.9, commission_percent = 0,
         price_mode = 'matrix_cell',
         fabric_group = $7, validation_profile = $8,
@@ -100,7 +100,7 @@ async function upsertSkupina(client, groupNum) {
        WHERE id = $1`,
       [
         id,
-        "Interiérové stínění",
+        "cat_interier",
         minPrice,
         IMG,
         desc,
@@ -115,14 +115,14 @@ async function upsertSkupina(client, groupNum) {
     );
   } else {
     const ins = await client.query(
-      `INSERT INTO "Product" (title, category, price, badge, img, "desc",
+      `INSERT INTO "Product" (id, name, "categoryId", "priceCzk", badge, image, description,
         supplier_markup_percent, commission_percent, price_mode,
         fabric_group, validation_profile,
         width_mm_min, width_mm_max, height_mm_min, height_mm_max)
-       VALUES ($1, $2, $3, $4, $5, $6, 4.9, 0, 'matrix_cell', $7, $8, $9, $10, $11, $12) RETURNING id`,
+       VALUES ('prd_' || substr(md5(random()::text), 1, 10), $1, $2, $3, $4, $5, $6, 4.9, 0, 'matrix_cell', $7, $8, $9, $10, $11, $12) RETURNING id`,
       [
         title,
-        "Interiérové stínění",
+        "cat_interier",
         minPrice,
         "Na míru",
         IMG,
@@ -141,7 +141,7 @@ async function upsertSkupina(client, groupNum) {
   for (const b of brackets) {
     await client.query(
       `INSERT INTO "ProductPriceBracket" (product_id, width_mm_max, height_mm_max, base_price_czk, sort_order)
-       VALUES ($1, $2, $3, $4, $5)`,
+       VALUES ( $1, $2, $3, $4, $5)`,
       [id, b.width_mm_max, b.height_mm_max, b.base_price_czk, b.sort_order]
     );
   }

@@ -18,7 +18,7 @@ export type QuoteComputeResult =
  */
 export async function computeProductQuote(
   db: Pool | PoolClient,
-  productId: number,
+  productId: string,
   widthMm: number,
   heightMm: number,
   body: Record<string, unknown>

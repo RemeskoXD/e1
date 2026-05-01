@@ -15,6 +15,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import XLSX from "xlsx";
 import { Pool } from "pg";
+import { downloadOrReadFileBuffer } from "./download-or-read-file.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -22,7 +23,7 @@ const VAT_DIVISOR = 1.21;
 
 const DEFAULT_XLSX =
   process.env.CENIK_XLSX_PATH ||
-  "C:/Users/ludvi/Desktop/Qapieshop/Katalogy/04_CENIK_vertikalni_zaluzie_DPH.xlsx";
+  "https://web2.itnahodinu.cz/qapieshop/Katalogy/04_CENIK_vertikalni_zaluzie_DPH.xlsx";
 
 function normCell(v) {
   if (v == null || v === "") return "";
@@ -66,14 +67,14 @@ function exVatPerM2(kcWithVat) {
 async function ensureSchema(client) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS "Product" (
-      id SERIAL PRIMARY KEY,
-      title VARCHAR(255) NOT NULL,
-      category VARCHAR(255),
-      price INTEGER,
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      "categoryId" TEXT,
+      "priceCzk" INTEGER,
       "oldPrice" INTEGER,
       badge VARCHAR(50),
-      img TEXT,
-      "desc" TEXT
+      image TEXT,
+      description TEXT
     );
   `);
   for (const sql of [
@@ -86,7 +87,7 @@ async function ensureSchema(client) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS "ProductHeightPriceTier" (
       id SERIAL PRIMARY KEY,
-      product_id INTEGER NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
       height_mm_min INTEGER NOT NULL,
       height_mm_max INTEGER NOT NULL,
       price_per_m2_czk INTEGER NOT NULL,
@@ -173,22 +174,22 @@ async function upsertFabricProduct(client, fabricName, tiers, { prefix, xlsxBase
     `Vertikální žaluzie — látka ${fabricName}. Ceny z ${xlsxBase}: v XLSX jsou uvedeny Kč/m² s DPH, do e-shopu se ukládají bez DPH (÷ ${VAT_DIVISOR}, zaokrouhleno na celé Kč/m²). ` +
     `Výpočet: (šířka × výška v m²) × sazba za m² podle výšky žaluzie. Minimální rozměry v tabulce nejsou — doplníte v administraci.`;
 
-  const r = await client.query(`SELECT id FROM "Product" WHERE title = $1`, [title]);
+  const r = await client.query(`SELECT id FROM "Product" WHERE name = $1`, [title]);
   let id;
   if (r.rows[0]) {
     id = r.rows[0].id;
     await client.query(`DELETE FROM "ProductHeightPriceTier" WHERE product_id = $1`, [id]);
     await client.query(
-      `UPDATE "Product" SET category=$2, price=$3, img=$4, "desc"=$5, badge=$6,
+      `UPDATE "Product" SET "categoryId"=$2, "priceCzk"=$3, image=$4, description=$5, badge=$6,
         supplier_markup_percent = 4.9, price_mode = $7
        WHERE id = $1`,
-      [id, "Interiérové stínění", minPpm, IMG_VERT, desc, "Na míru", "m2_height_tiers"]
+      [id, "cat_interier", minPpm, IMG_VERT, desc, "Na míru", "m2_height_tiers"]
     );
   } else {
     const ins = await client.query(
-      `INSERT INTO "Product" (title, category, price, badge, img, "desc", supplier_markup_percent, commission_percent, price_mode)
-       VALUES ($1, $2, $3, $4, $5, $6, 4.9, 0, $7) RETURNING id`,
-      [title, "Interiérové stínění", minPpm, "Na míru", IMG_VERT, desc, "m2_height_tiers"]
+      `INSERT INTO "Product" (id, name, "categoryId", "priceCzk", badge, image, description, supplier_markup_percent, commission_percent, price_mode)
+       VALUES ('prd_' || substr(md5(random()::text), 1, 10), $1, $2, $3, $4, $5, $6, 4.9, 0, $7) RETURNING id`,
+      [title, "cat_interier", minPpm, "Na míru", IMG_VERT, desc, "m2_height_tiers"]
     );
     id = ins.rows[0].id;
   }
@@ -196,7 +197,7 @@ async function upsertFabricProduct(client, fabricName, tiers, { prefix, xlsxBase
   for (const t of tiers) {
     await client.query(
       `INSERT INTO "ProductHeightPriceTier" (product_id, height_mm_min, height_mm_max, price_per_m2_czk, sort_order)
-       VALUES ($1, $2, $3, $4, $5)`,
+       VALUES ( $1, $2, $3, $4, $5)`,
       [id, t.height_mm_min, t.height_mm_max, t.price_per_m2_czk, t.sort_order]
     );
   }
@@ -204,8 +205,9 @@ async function upsertFabricProduct(client, fabricName, tiers, { prefix, xlsxBase
 }
 
 async function main() {
-  const xlsxPath = path.resolve(process.argv[2] || DEFAULT_XLSX);
-  if (!fs.existsSync(xlsxPath)) {
+  const inputArg = process.argv[2] || DEFAULT_XLSX;
+  const xlsxPath = inputArg.startsWith("http") ? inputArg : path.resolve(inputArg);
+  if (!inputArg.startsWith("http") && !fs.existsSync(xlsxPath)) {
     console.error("Soubor neexistuje:", xlsxPath);
     process.exit(1);
   }
@@ -214,9 +216,10 @@ async function main() {
     process.exit(1);
   }
 
-  const wb = XLSX.readFile(xlsxPath, { cellDates: true });
+  const buf = await downloadOrReadFileBuffer(xlsxPath);
+  const wb = XLSX.read(buf, { cellDates: true });
   const { sheetName, blocks } = parseWorkbook(wb);
-  const base = path.basename(xlsxPath);
+  const base = inputArg.startsWith("http") ? inputArg.split("/").pop() : path.basename(xlsxPath);
 
   console.log("List:", sheetName, "| soubor:", base);
   console.log("Látek (produktů):", blocks.length);

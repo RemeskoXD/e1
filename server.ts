@@ -140,7 +140,7 @@ async function ensureSchema(db: Pool) {
   await db.query(`
     CREATE TABLE IF NOT EXISTS "ProductHeightPriceTier" (
       id SERIAL PRIMARY KEY,
-      product_id INTEGER NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
       height_mm_min INTEGER NOT NULL,
       height_mm_max INTEGER NOT NULL,
       price_per_m2_czk INTEGER NOT NULL,
@@ -152,7 +152,7 @@ async function ensureSchema(db: Pool) {
   await db.query(`
     CREATE TABLE IF NOT EXISTS "ProductPriceBracket" (
       id SERIAL PRIMARY KEY,
-      product_id INTEGER NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
       width_mm_max INTEGER NOT NULL,
       height_mm_max INTEGER NOT NULL,
       base_price_czk INTEGER NOT NULL,
@@ -173,7 +173,7 @@ async function ensureSchema(db: Pool) {
     CREATE TABLE IF NOT EXISTS "OrderItem" (
       id SERIAL PRIMARY KEY,
       order_id INTEGER NOT NULL REFERENCES "Order"(id) ON DELETE CASCADE,
-      product_id INTEGER NOT NULL REFERENCES "Product"(id),
+      product_id TEXT NOT NULL REFERENCES "Product"(id),
       product_title VARCHAR(500),
       width_mm INTEGER NOT NULL,
       height_mm INTEGER NOT NULL,
@@ -419,10 +419,10 @@ async function startServer() {
 
   /** Kalkulace z rozměrové tabulky + navýšení dodavatele + provize (zaokrouhleno na Kč). */
   app.post("/api/products/:id/quote", quoteLimiter, async (req, res) => {
-    const id = Number(req.params.id);
+    const id = req.params.id;
     const widthMm = Number(req.body?.widthMm ?? req.body?.width_mm);
     const heightMm = Number(req.body?.heightMm ?? req.body?.height_mm);
-    if (!Number.isFinite(id) || id < 1) {
+    if (!id) {
       return res.status(400).json({ error: "Neplatné ID produktu" });
     }
     if (!Number.isFinite(widthMm) || !Number.isFinite(heightMm) || widthMm < 1 || heightMm < 1) {
@@ -490,7 +490,7 @@ async function startServer() {
         let totalAmount = 0;
         let itemsCount = 0;
         const lineRows: Array<{
-          product_id: number;
+          product_id: string;
           product_title: string;
           width_mm: number;
           height_mm: number;
@@ -502,7 +502,7 @@ async function startServer() {
 
         for (const raw of items) {
           const it = raw as Record<string, unknown>;
-          const productId = Number(it.productId ?? it.product_id);
+          const productId = String(it.productId ?? it.product_id);
           const widthMm = Number(it.widthMm ?? it.width_mm);
           const heightMm = Number(it.heightMm ?? it.height_mm);
           let quantity = Math.max(1, Math.floor(Number(it.quantity) || 1));
@@ -523,7 +523,7 @@ async function startServer() {
               msg: "Příliš rozsáhlé parametry u položky košíku.",
             });
           }
-          if (!Number.isFinite(productId) || productId < 1) {
+          if (!productId) {
             throw Object.assign(new Error("BAD_ITEM"), {
               status: 400,
               msg: "Neplatná položka košíku (produkt).",
@@ -800,8 +800,8 @@ async function startServer() {
   app.get("/api/admin/products/:id/brackets", requireAdmin, async (req, res) => {
     await withDb(res, async (db) => {
       try {
-        const id = Number(req.params.id);
-        if (!Number.isFinite(id) || id < 1) {
+        const id = req.params.id;
+        if (!id) {
           res.status(400).json({ error: "Neplatné ID" });
           return;
         }
@@ -819,9 +819,9 @@ async function startServer() {
 
   app.put("/api/admin/products/:id/brackets", requireAdmin, async (req, res) => {
     await withDb(res, async (db) => {
-      const id = Number(req.params.id);
+      const id = req.params.id;
       const rows = req.body?.rows;
-      if (!Number.isFinite(id) || id < 1 || !Array.isArray(rows)) {
+      if (!id || !Array.isArray(rows)) {
         res.status(400).json({ error: "Neplatná data (očekávám pole rows)." });
         return;
       }
@@ -897,9 +897,9 @@ async function startServer() {
         const fabric_group_ins = optIntCol(bodyRec, "fabric_group");
         const validation_profile_ins = optStrCol(bodyRec, "validation_profile");
         const result = await db.query(
-          `INSERT INTO "Product" (title, category, price, "oldPrice", badge, img, "desc", supplier_markup_percent, commission_percent,
+          `INSERT INTO "Product" (id, name, "categoryId", "priceCzk", "oldPrice", badge, image, description, supplier_markup_percent, commission_percent,
             width_mm_min, width_mm_max, height_mm_min, height_mm_max, max_area_m2, price_mode, fabric_group, validation_profile)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING *`,
+           VALUES ('prd_' || substr(md5(random()::text), 1, 10), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING *`,
           [
             title,
             category,
@@ -952,7 +952,7 @@ async function startServer() {
         const fabric_group_upd = optIntCol(bodyRec, "fabric_group");
         const validation_profile_upd = optStrCol(bodyRec, "validation_profile");
         const result = await db.query(
-          `UPDATE "Product" SET title=$1, category=$2, price=$3, "oldPrice"=$4, badge=$5, img=$6, "desc"=$7,
+          `UPDATE "Product" SET name=$1, "categoryId"=$2, "priceCzk"=$3, "oldPrice"=$4, badge=$5, image=$6, description=$7,
             supplier_markup_percent=$9, commission_percent=$10,
             width_mm_min=$11, width_mm_max=$12, height_mm_min=$13, height_mm_max=$14, max_area_m2=$15,
             price_mode=$16, fabric_group=$17, validation_profile=$18
@@ -993,7 +993,7 @@ async function startServer() {
   app.delete("/api/admin/products/:id", requireAdmin, async (req, res) => {
     await withDb(res, async (db) => {
       try {
-        const { id } = req.params;
+        const id = req.params.id;
         await db.query('DELETE FROM "Product" WHERE id=$1', [id]);
         res.json({ success: true });
       } catch {

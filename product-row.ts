@@ -59,7 +59,7 @@ export function optStrCol(row: Record<string, unknown>, key: string): string | n
 }
 
 export function mapProductRow(row: Record<string, unknown>) {
-  const price = num(row, "price");
+  const price = num(row, "priceCzk", "price");
   const oldPriceRaw = row.oldPrice ?? row.oldprice;
   const oldPrice =
     oldPriceRaw === null || oldPriceRaw === undefined || oldPriceRaw === ""
@@ -73,6 +73,10 @@ export function mapProductRow(row: Record<string, unknown>) {
   const dim = readDimConstraints(row);
   return {
     ...row,
+    title: String(row.name ?? row.title ?? ""),
+    category: String(row.categoryId ?? row.category ?? ""),
+    img: String(row.image ?? row.img ?? ""),
+    desc: String(row.description ?? row.desc ?? ""),
     price,
     oldPrice: oldPrice !== null ? oldPrice : undefined,
     supplier_markup_percent: supplier,

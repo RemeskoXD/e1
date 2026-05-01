@@ -41,14 +41,14 @@ const PRODUCTS = [
 async function ensureSchema(client) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS "Product" (
-      id SERIAL PRIMARY KEY,
-      title VARCHAR(255) NOT NULL,
-      category VARCHAR(255),
-      price INTEGER,
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      "categoryId" TEXT,
+      "priceCzk" INTEGER,
       "oldPrice" INTEGER,
       badge VARCHAR(50),
-      img TEXT,
-      "desc" TEXT
+      image TEXT,
+      description TEXT
     );
   `);
   for (const sql of [
@@ -61,7 +61,7 @@ async function ensureSchema(client) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS "ProductHeightPriceTier" (
       id SERIAL PRIMARY KEY,
-      product_id INTEGER NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
       height_mm_min INTEGER NOT NULL,
       height_mm_max INTEGER NOT NULL,
       price_per_m2_czk INTEGER NOT NULL,
@@ -71,22 +71,22 @@ async function ensureSchema(client) {
 }
 
 async function upsertProduct(client, { title, ppm, priceOd, desc }) {
-  const r = await client.query(`SELECT id FROM "Product" WHERE title = $1`, [title]);
+  const r = await client.query(`SELECT id FROM "Product" WHERE name = $1`, [title]);
   let id;
   if (r.rows[0]) {
     id = r.rows[0].id;
     await client.query(`DELETE FROM "ProductHeightPriceTier" WHERE product_id = $1`, [id]);
     await client.query(
-      `UPDATE "Product" SET category=$2, price=$3, img=$4, "desc"=$5, badge=$6,
+      `UPDATE "Product" SET "categoryId"=$2, "priceCzk"=$3, image=$4, description=$5, badge=$6,
         supplier_markup_percent = 4.9, price_mode = $7, commission_percent = COALESCE(commission_percent, 0)
        WHERE id = $1`,
-      [id, "Interiérové stínění", priceOd, IMG, desc, "Na míru", "m2_height_tiers"]
+      [id, "cat_interier", priceOd, IMG, desc, "Na míru", "m2_height_tiers"]
     );
   } else {
     const ins = await client.query(
-      `INSERT INTO "Product" (title, category, price, badge, img, "desc", supplier_markup_percent, commission_percent, price_mode)
-       VALUES ($1, $2, $3, $4, $5, $6, 4.9, 0, $7) RETURNING id`,
-      [title, "Interiérové stínění", priceOd, "Na míru", IMG, desc, "m2_height_tiers"]
+      `INSERT INTO "Product" (id, name, "categoryId", "priceCzk", badge, image, description, supplier_markup_percent, commission_percent, price_mode)
+       VALUES ('prd_' || substr(md5(random()::text), 1, 10), $1, $2, $3, $4, $5, $6, 4.9, 0, $7) RETURNING id`,
+      [title, "cat_interier", priceOd, "Na míru", IMG, desc, "m2_height_tiers"]
     );
     id = ins.rows[0].id;
   }
@@ -94,7 +94,7 @@ async function upsertProduct(client, { title, ppm, priceOd, desc }) {
   for (const t of tiers) {
     await client.query(
       `INSERT INTO "ProductHeightPriceTier" (product_id, height_mm_min, height_mm_max, price_per_m2_czk, sort_order)
-       VALUES ($1, $2, $3, $4, $5)`,
+       VALUES ( $1, $2, $3, $4, $5)`,
       [id, t.height_mm_min, t.height_mm_max, t.price_per_m2_czk, t.sort_order]
     );
   }

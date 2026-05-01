@@ -18,14 +18,14 @@ const IMG =
 async function ensureSchema(client) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS "Product" (
-      id SERIAL PRIMARY KEY,
-      title VARCHAR(255) NOT NULL,
-      category VARCHAR(255),
-      price INTEGER,
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      "categoryId" TEXT,
+      "priceCzk" INTEGER,
       "oldPrice" INTEGER,
       badge VARCHAR(50),
-      img TEXT,
-      "desc" TEXT
+      image TEXT,
+      description TEXT
     );
   `);
   for (const sql of [
@@ -45,7 +45,7 @@ async function ensureSchema(client) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS "ProductPriceBracket" (
       id SERIAL PRIMARY KEY,
-      product_id INTEGER NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
       width_mm_max INTEGER NOT NULL,
       height_mm_max INTEGER NOT NULL,
       base_price_czk INTEGER NOT NULL,
@@ -77,29 +77,29 @@ async function main() {
   const client = await pool.connect();
   try {
     await ensureSchema(client);
-    const r = await client.query(`SELECT id FROM "Product" WHERE title = $1`, [PRODUCT_TITLE]);
+    const r = await client.query(`SELECT id FROM "Product" WHERE name = $1`, [PRODUCT_TITLE]);
     let id;
     if (r.rows[0]) {
       id = r.rows[0].id;
       await client.query(`DELETE FROM "ProductPriceBracket" WHERE product_id = $1`, [id]);
       await client.query(
-        `UPDATE "Product" SET category=$2, price=$3, img=$4, "desc"=$5, badge=$6,
+        `UPDATE "Product" SET "categoryId"=$2, "priceCzk"=$3, image=$4, description=$5, badge=$6,
           supplier_markup_percent = 4.9, commission_percent = 0,
           price_mode = 'matrix_cell',
           fabric_group = NULL, validation_profile = $7,
           width_mm_min = 500, width_mm_max = 4000, height_mm_min = 500, height_mm_max = 3000,
           max_area_m2 = NULL
          WHERE id = $1`,
-        [id, "Screenové rolety", minPrice, IMG, desc, "Na míru", "screen_roleta_union_l"]
+        [id, "cat_venkovni", minPrice, IMG, desc, "Na míru", "screen_roleta_union_l"]
       );
     } else {
       const ins = await client.query(
-        `INSERT INTO "Product" (title, category, price, badge, img, "desc",
+        `INSERT INTO "Product" (id, name, "categoryId", "priceCzk", badge, image, description,
           supplier_markup_percent, commission_percent, price_mode,
           validation_profile,
           width_mm_min, width_mm_max, height_mm_min, height_mm_max)
-         VALUES ($1, $2, $3, $4, $5, $6, 4.9, 0, 'matrix_cell', $7, 500, 4000, 500, 3000) RETURNING id`,
-        [PRODUCT_TITLE, "Screenové rolety", minPrice, "Na míru", IMG, desc, "screen_roleta_union_l"]
+         VALUES ('prd_' || substr(md5(random()::text), 1, 10), $1, $2, $3, $4, $5, $6, 4.9, 0, 'matrix_cell', $7, 500, 4000, 500, 3000) RETURNING id`,
+        [PRODUCT_TITLE, "cat_venkovni", minPrice, "Na míru", IMG, desc, "screen_roleta_union_l"]
       );
       id = ins.rows[0].id;
     }
@@ -107,7 +107,7 @@ async function main() {
     for (const b of brackets) {
       await client.query(
         `INSERT INTO "ProductPriceBracket" (product_id, width_mm_max, height_mm_max, base_price_czk, sort_order)
-         VALUES ($1, $2, $3, $4, $5)`,
+         VALUES ( $1, $2, $3, $4, $5)`,
         [id, b.width_mm_max, b.height_mm_max, b.base_price_czk, b.sort_order]
       );
     }

@@ -12,12 +12,13 @@ import { fileURLToPath } from "url";
 import { Pool } from "pg";
 import { PDFParse } from "pdf-parse";
 import { extractExt50Int50StandardMatrices } from "./parse-ext50-int50-from-pdf-text.mjs";
+import { downloadOrReadFileBuffer } from "./download-or-read-file.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 
 const DEFAULT_PDF =
   process.env.EXT50_INT50_PDF ||
-  "C:/Users/ludvi/Desktop/Qapieshop/Katalogy/09_CENIK_venkovni_zaluzie-2.pdf";
+  "https://web2.itnahodinu.cz/qapieshop/Katalogy/09_CENIK_venkovni_zaluzie-2.pdf";
 
 const PRODUCT_TITLE = "Vertikální žaluzie EXT 50 / INT 50 — standard";
 const IMG =
@@ -26,14 +27,14 @@ const IMG =
 async function ensureSchema(client) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS "Product" (
-      id SERIAL PRIMARY KEY,
-      title VARCHAR(255) NOT NULL,
-      category VARCHAR(255),
-      price INTEGER,
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      "categoryId" TEXT,
+      "priceCzk" INTEGER,
       "oldPrice" INTEGER,
       badge VARCHAR(50),
-      img TEXT,
-      "desc" TEXT
+      image TEXT,
+      description TEXT
     );
   `);
   for (const sql of [
@@ -53,7 +54,7 @@ async function ensureSchema(client) {
   await client.query(`
     CREATE TABLE IF NOT EXISTS "ProductPriceBracket" (
       id SERIAL PRIMARY KEY,
-      product_id INTEGER NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
       width_mm_max INTEGER NOT NULL,
       height_mm_max INTEGER NOT NULL,
       base_price_czk INTEGER NOT NULL,
@@ -63,8 +64,9 @@ async function ensureSchema(client) {
 }
 
 async function main() {
-  const pdfPath = path.resolve(process.argv[2] || DEFAULT_PDF);
-  if (!fs.existsSync(pdfPath)) {
+  const inputArg = process.argv[2] || DEFAULT_PDF;
+  const pdfPath = inputArg.startsWith("http") ? inputArg : path.resolve(inputArg);
+  if (!inputArg.startsWith("http") && !fs.existsSync(pdfPath)) {
     console.error("Soubor neexistuje:", pdfPath);
     process.exit(1);
   }
@@ -73,14 +75,14 @@ async function main() {
     process.exit(1);
   }
 
-  const buf = fs.readFileSync(pdfPath);
+  const buf = await downloadOrReadFileBuffer(pdfPath);
   const parser = new PDFParse({ data: buf });
   const textRes = await parser.getText();
   await parser.destroy();
 
   const { brackets } = extractExt50Int50StandardMatrices(textRes.text);
   const minPrice = Math.min(...brackets.map((b) => b.base_price_czk));
-  const baseName = path.basename(pdfPath);
+  const baseName = inputArg.startsWith("http") ? inputArg.split("/").pop() : path.basename(pdfPath);
   const desc =
     `Žaluzie EXT 50 (venkovní) a INT 50 (interiérová) v standardním provedení — ovládání nekonečná šňůra / nekonečný řetízek, příslušenství bílá/stříbrná, bez krycího plechu. ` +
     `Ceny v Kč bez DPH dle mřížky šířka × výška (mm); výpočet k nejbližšímu vyššímu tabulkovému rozměru. ` +
@@ -96,29 +98,29 @@ async function main() {
   const client = await pool.connect();
   try {
     await ensureSchema(client);
-    const r = await client.query(`SELECT id FROM "Product" WHERE title = $1`, [PRODUCT_TITLE]);
+    const r = await client.query(`SELECT id FROM "Product" WHERE name = $1`, [PRODUCT_TITLE]);
     let id;
     if (r.rows[0]) {
       id = r.rows[0].id;
       await client.query(`DELETE FROM "ProductPriceBracket" WHERE product_id = $1`, [id]);
       await client.query(
-        `UPDATE "Product" SET category=$2, price=$3, img=$4, "desc"=$5, badge=$6,
+        `UPDATE "Product" SET "categoryId"=$2, "priceCzk"=$3, image=$4, description=$5, badge=$6,
           supplier_markup_percent = 4.9, commission_percent = 0,
           price_mode = 'matrix_cell',
           fabric_group = NULL, validation_profile = $7,
           width_mm_min = 500, width_mm_max = 4000, height_mm_min = 500, height_mm_max = 3100,
           max_area_m2 = NULL
          WHERE id = $1`,
-        [id, "Interiérové stínění", minPrice, IMG, desc, "Na míru", "ext50_int50_matrix"]
+        [id, "cat_interier", minPrice, IMG, desc, "Na míru", "ext50_int50_matrix"]
       );
     } else {
       const ins = await client.query(
-        `INSERT INTO "Product" (title, category, price, badge, img, "desc",
+        `INSERT INTO "Product" (id, name, "categoryId", "priceCzk", badge, image, description,
           supplier_markup_percent, commission_percent, price_mode,
           validation_profile,
           width_mm_min, width_mm_max, height_mm_min, height_mm_max)
-         VALUES ($1, $2, $3, $4, $5, $6, 4.9, 0, 'matrix_cell', $7, 500, 4000, 500, 3100) RETURNING id`,
-        [PRODUCT_TITLE, "Interiérové stínění", minPrice, "Na míru", IMG, desc, "ext50_int50_matrix"]
+         VALUES ('prd_' || substr(md5(random()::text), 1, 10), $1, $2, $3, $4, $5, $6, 4.9, 0, 'matrix_cell', $7, 500, 4000, 500, 3100) RETURNING id`,
+        [PRODUCT_TITLE, "cat_interier", minPrice, "Na míru", IMG, desc, "ext50_int50_matrix"]
       );
       id = ins.rows[0].id;
     }
@@ -126,7 +128,7 @@ async function main() {
     for (const b of brackets) {
       await client.query(
         `INSERT INTO "ProductPriceBracket" (product_id, width_mm_max, height_mm_max, base_price_czk, sort_order)
-         VALUES ($1, $2, $3, $4, $5)`,
+         VALUES ( $1, $2, $3, $4, $5)`,
         [id, b.width_mm_max, b.height_mm_max, b.base_price_czk, b.sort_order]
       );
     }

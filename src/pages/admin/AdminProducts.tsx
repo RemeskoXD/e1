@@ -62,6 +62,7 @@ function formatDimsMm(p: Product): string {
 
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<{ id: string; title: string; slug: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -89,21 +90,28 @@ export default function AdminProducts() {
     validation_profile: '',
   });
 
-  const fetchProducts = async () => {
+  const fetchData = async () => {
     setFetchError(null);
     try {
-      const res = await fetch('/api/products');
-      const data = await res.json();
-      if (!res.ok) {
+      const [resProd, resCat] = await Promise.all([
+        fetch('/api/products'),
+        fetch('/api/categories'),
+      ]);
+      const dataProd = await resProd.json();
+      const dataCat = await resCat.json();
+      if (!resProd.ok) {
         setProducts([]);
-        setFetchError(typeof data?.error === 'string' ? data.error : 'Nepodařilo se načíst produkty.');
+        setFetchError(typeof dataProd?.error === 'string' ? dataProd.error : 'Nepodařilo se načíst produkty.');
         return;
       }
-      if (Array.isArray(data)) {
-        setProducts(data as Product[]);
+      if (Array.isArray(dataProd)) {
+        setProducts(dataProd as Product[]);
       } else {
         setProducts([]);
         setFetchError('Odpověď serveru není seznam produktů.');
+      }
+      if (Array.isArray(dataCat)) {
+        setCategories(dataCat);
       }
     } catch {
       setProducts([]);
@@ -113,8 +121,10 @@ export default function AdminProducts() {
     }
   };
 
+  const fetchProducts = fetchData; // pro zpětnou kompatibilitu
+
   useEffect(() => {
-    fetchProducts();
+    fetchData();
   }, []);
 
   const customerPrice = (p: Product) =>
@@ -411,7 +421,7 @@ export default function AdminProducts() {
                       </div>
                     </div>
                   </td>
-                  <td className="py-4 px-6 text-gray-500">{prod.category}</td>
+                  <td className="py-4 px-6 text-gray-500">{categories.find(c => c.id === prod.category)?.title || prod.category}</td>
                   <td className="py-4 px-6 text-xs text-gray-600 whitespace-nowrap">{formatDimsMm(prod)}</td>
                   <td className="py-4 px-6">{formatCzk(prod.price)} Kč</td>
                   <td className="py-4 px-6">{toMoneyNumber(prod.supplier_markup_percent)} %</td>
@@ -479,14 +489,17 @@ export default function AdminProducts() {
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Kategorie</label>
-                  <input
+                  <select
                     required
-                    type="text"
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    placeholder="např. Žaluzie, Rolety"
                     className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
-                  />
+                  >
+                    <option value="" disabled>-- Vyberte kategorii --</option>
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.title}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Cena ze ceníku / základ (Kč)</label>
