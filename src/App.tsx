@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { HelmetProvider } from 'react-helmet-async';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import Home from './pages/Home';
@@ -82,28 +83,32 @@ export default function App() {
 
   if (isAdmin) {
     return (
-      <AdminLayout currentPath={currentPath}>
-        {adminOrderId != null ? (
-          <AdminOrderDetail orderId={adminOrderId} />
-        ) : (
-          <>
-            {currentPath === '#/admin' && <AdminDashboard />}
-            {currentPath === '#/admin/products' && <AdminProducts />}
-            {currentPath === '#/admin/categories' && <AdminCategories />}
-            {currentPath === '#/admin/orders' && <AdminOrders />}
-            {currentPath === '#/admin/customers' && <AdminCustomers />}
-            {currentPath === '#/admin/settings' && <AdminSettings />}
-            {currentPath === '#/admin/brackets' && <AdminBrackets />}
-            {currentPath === '#/admin/measure-guide' && <AdminMeasureGuide />}
-          </>
-        )}
-      </AdminLayout>
+      <HelmetProvider>
+        <AdminLayout currentPath={currentPath}>
+          {adminOrderId != null ? (
+            <AdminOrderDetail orderId={adminOrderId} />
+          ) : (
+            <>
+              {currentPath === '#/admin' && <AdminDashboard />}
+              {currentPath === '#/admin/products' && <AdminProducts />}
+              {currentPath === '#/admin/categories' && <AdminCategories />}
+              {currentPath === '#/admin/orders' && <AdminOrders />}
+              {currentPath === '#/admin/customers' && <AdminCustomers />}
+              {currentPath === '#/admin/settings' && <AdminSettings />}
+              {currentPath === '#/admin/brackets' && <AdminBrackets />}
+              {currentPath === '#/admin/measure-guide' && <AdminMeasureGuide />}
+            </>
+          )}
+        </AdminLayout>
+      </HelmetProvider>
     );
   }
 
   return (
-    <CartProvider>
-      <StorefrontRoutes currentPath={currentPath} />
-    </CartProvider>
+    <HelmetProvider>
+      <CartProvider>
+        <StorefrontRoutes currentPath={currentPath} />
+      </CartProvider>
+    </HelmetProvider>
   );
 }

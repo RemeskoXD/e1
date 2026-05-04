@@ -86,6 +86,8 @@ export function mapProductRow(row: Record<string, unknown>) {
     dimension_constraints: dim,
     fabric_group: optIntCol(row, "fabric_group"),
     validation_profile: optStrCol(row, "validation_profile"),
+    hidden: Boolean(row.hidden),
+    gallery: Array.isArray(row.gallery) ? row.gallery : [],
   };
 }
 

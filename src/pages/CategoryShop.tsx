@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ArrowRight, ChevronRight, Grid3x3, LayoutGrid, Search, SlidersHorizontal } from 'lucide-react';
 import { computeDisplayPriceCzk, formatCzk, toMoneyNumber } from '../lib/money';
+import { Helmet } from 'react-helmet-async';
 
 type SortKey = 'recommended' | 'price_asc' | 'price_desc' | 'name_asc' | 'name_desc';
 
@@ -26,25 +27,38 @@ type Product = {
   old_display_price?: number;
 };
 
-function readParams(): { cat: string; q: string; sort: SortKey } {
+function readParams(): { cat: string; q: string; sort: SortKey; page: number; minPrice: number | ''; maxPrice: number | '' } {
   const hash = window.location.hash || '#/kategorie';
   const qPart = hash.includes('?') ? hash.split('?')[1] : '';
   const sp = new URLSearchParams(qPart);
   const sortRaw = sp.get('sort') || '';
   const sortAllowed: SortKey[] = ['recommended', 'price_asc', 'price_desc', 'name_asc', 'name_desc'];
   const sort = sortAllowed.includes(sortRaw as SortKey) ? (sortRaw as SortKey) : 'recommended';
+  
+  const pageRaw = parseInt(sp.get('page') || '1', 10);
+  const page = isNaN(pageRaw) || pageRaw < 1 ? 1 : pageRaw;
+  
+  const minP = parseFloat(sp.get('minP') || '');
+  const maxP = parseFloat(sp.get('maxP') || '');
+
   return {
     cat: sp.get('cat')?.trim() || '',
     q: sp.get('q')?.trim() || '',
     sort,
+    page,
+    minPrice: isNaN(minP) ? '' : minP,
+    maxPrice: isNaN(maxP) ? '' : maxP,
   };
 }
 
-function writeHash(cat: string, q: string, sort: SortKey) {
+function writeHash(cat: string, q: string, sort: SortKey, page: number, minPrice: number | '', maxPrice: number | '') {
   const sp = new URLSearchParams();
   if (cat) sp.set('cat', cat);
   if (q) sp.set('q', q);
   if (sort !== 'recommended') sp.set('sort', sort);
+  if (page > 1) sp.set('page', String(page));
+  if (minPrice !== '') sp.set('minP', String(minPrice));
+  if (maxPrice !== '') sp.set('maxP', String(maxPrice));
   const qs = sp.toString();
   const next = qs ? `#/kategorie?${qs}` : '#/kategorie';
   if (window.location.hash !== next) {
@@ -68,8 +82,13 @@ export default function CategoryShop() {
   const [catFilter, setCatFilter] = useState(readParams().cat);
   const [searchQuery, setSearchQuery] = useState(readParams().q);
   const [sortKey, setSortKey] = useState<SortKey>(readParams().sort);
+  const [page, setPage] = useState<number>(readParams().page);
+  const [minPrice, setMinPrice] = useState<number | ''>(readParams().minPrice);
+  const [maxPrice, setMaxPrice] = useState<number | ''>(readParams().maxPrice);
   const [searchDraft, setSearchDraft] = useState(readParams().q);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  const pageSize = 12;
 
   const syncFromHash = useCallback(() => {
     const p = readParams();
@@ -77,6 +96,9 @@ export default function CategoryShop() {
     setSearchQuery(p.q);
     setSearchDraft(p.q);
     setSortKey(p.sort);
+    setPage(p.page);
+    setMinPrice(p.minPrice);
+    setMaxPrice(p.maxPrice);
   }, []);
 
   useEffect(() => {
@@ -144,6 +166,12 @@ export default function CategoryShop() {
         return t.includes(q);
       });
     }
+    if (minPrice !== '') {
+      list = list.filter(p => customerPrice(p) >= Number(minPrice));
+    }
+    if (maxPrice !== '') {
+      list = list.filter(p => customerPrice(p) <= Number(maxPrice));
+    }
     const sorted = [...list];
     switch (sortKey) {
       case 'price_asc':
@@ -159,29 +187,42 @@ export default function CategoryShop() {
         sorted.sort((a, b) => b.title.localeCompare(a.title, 'cs'));
         break;
       default:
-        sorted.sort((a, b) => a.id - b.id);
+        sorted.sort((a, b) => b.id - a.id); // reverse ID recommended
     }
     return sorted;
-  }, [products, catFilter, searchQuery, sortKey, customerPrice]);
+  }, [products, catFilter, searchQuery, sortKey, customerPrice, minPrice, maxPrice]);
 
-  const applyFilters = (patch: Partial<{ cat: string; q: string; sort: SortKey }>) => {
+  const maxPage = Math.max(1, Math.ceil(filtered.length / pageSize));
+  
+  const paginated = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+
+  const applyFilters = (patch: Partial<{ cat: string; q: string; sort: SortKey; page: number; minPrice: number | ''; maxPrice: number | '' }>) => {
     const cat = patch.cat !== undefined ? patch.cat : catFilter;
     const q = patch.q !== undefined ? patch.q : searchQuery;
     const sort = patch.sort !== undefined ? patch.sort : sortKey;
+    const pPage = patch.page !== undefined ? patch.page : page;
+    const pMin = patch.minPrice !== undefined ? patch.minPrice : minPrice;
+    const pMax = patch.maxPrice !== undefined ? patch.maxPrice : maxPrice;
     setCatFilter(cat);
     setSearchQuery(q);
     setSortKey(sort);
-    writeHash(cat, q, sort);
+    setPage(pPage);
+    setMinPrice(pMin);
+    setMaxPrice(pMax);
+    writeHash(cat, q, sort, pPage, pMin, pMax);
   };
 
   const onSelectCategory = (name: string) => {
-    applyFilters({ cat: name });
+    applyFilters({ cat: name, page: 1 });
     setMobileFiltersOpen(false);
   };
 
   const submitSearch = (e: FormEvent) => {
     e.preventDefault();
-    applyFilters({ q: searchDraft.trim() });
+    applyFilters({ q: searchDraft.trim(), page: 1 });
   };
 
   const totalLabel = catFilter ? catFilter : 'Kompletní nabídka';
@@ -200,6 +241,10 @@ export default function CategoryShop() {
 
   return (
     <div className="flex-grow bg-[#F0F2F4]">
+      <Helmet>
+        <title>{catFilter ? `${catFilter} | Kategorie | Qapi.cz` : 'Katalog produktů | Qapi.cz'}</title>
+        <meta name="description" content={`Prozkoumejte naše kvalitní produkty. ${catFilter ? `Kategorie: ${catFilter}` : 'Všechna nabídka na jednom místě.'}`} />
+      </Helmet>
       <div className="container mx-auto px-4 md:px-6 py-8 md:py-10">
         <nav className="text-sm text-gray-500 mb-6 flex flex-wrap items-center gap-1">
           <a href="#/" className="hover:text-[#CCAD8A]">
@@ -222,7 +267,7 @@ export default function CategoryShop() {
               <div className="px-5 py-4 border-b border-gray-100 bg-[#132333] text-white">
                 <h2 className="font-bold flex items-center gap-2">
                   <Grid3x3 size={18} className="text-[#CCAD8A]" />
-                  Kategorie
+                  Kategorie a filtry
                 </h2>
                 <p className="text-xs text-white/70 mt-1">Vyfiltrujte sortiment podle typu produktu.</p>
               </div>
@@ -254,6 +299,27 @@ export default function CategoryShop() {
                     </button>
                   );
                 })}
+
+                <div className="mt-4 px-4 pt-4 border-t border-gray-100">
+                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Cena (Kč)</h3>
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      type="number"
+                      placeholder="Od"
+                      value={minPrice === '' ? '' : minPrice}
+                      onChange={(e) => applyFilters({ minPrice: e.target.value ? Number(e.target.value) : '' })}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-[#CCAD8A]"
+                    />
+                    <span className="text-gray-400">-</span>
+                    <input
+                      type="number"
+                      placeholder="Do"
+                      value={maxPrice === '' ? '' : maxPrice}
+                      onChange={(e) => applyFilters({ maxPrice: e.target.value ? Number(e.target.value) : '' })}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-[#CCAD8A]"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </aside>
@@ -305,32 +371,54 @@ export default function CategoryShop() {
                 {mobileFiltersOpen ? 'Skrýt kategorie' : 'Kategorie a filtry'}
               </button>
               {mobileFiltersOpen && (
-                <div className="bg-white rounded-2xl border border-gray-100 p-3 shadow-sm flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onSelectCategory('')}
-                    className={`px-3 py-2 rounded-lg text-xs font-bold ${
-                      !catFilter ? 'bg-[#132333] text-white' : 'bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    Všechny ({products.length})
-                  </button>
-                  {categories.map((c, idx) => {
-                    const n = countsByCategory.get(c.name) ?? 0;
-                    const active = catFilter === c.name;
-                    return (
-                      <button
-                        key={c.id ?? idx}
-                        type="button"
-                        onClick={() => onSelectCategory(c.name)}
-                        className={`px-3 py-2 rounded-lg text-xs font-bold max-w-[200px] truncate ${
-                          active ? 'bg-[#132333] text-white' : 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        {c.name} ({n})
-                      </button>
-                    );
-                  })}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden p-3 mt-2">
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <button
+                      type="button"
+                      onClick={() => onSelectCategory('')}
+                      className={`px-3 py-2 rounded-lg text-xs font-bold ${
+                        !catFilter ? 'bg-[#132333] text-white' : 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      Všechny ({products.length})
+                    </button>
+                    {categories.map((c, idx) => {
+                      const n = countsByCategory.get(c.name) ?? 0;
+                      const active = catFilter === c.name;
+                      return (
+                        <button
+                          key={c.id ?? idx}
+                          type="button"
+                          onClick={() => onSelectCategory(c.name)}
+                          className={`px-3 py-2 rounded-lg text-xs font-bold max-w-[200px] truncate ${
+                            active ? 'bg-[#132333] text-white' : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {c.name} ({n})
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="border-t border-gray-100 pt-3">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Cena (Kč)</h3>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        placeholder="Od"
+                        value={minPrice === '' ? '' : minPrice}
+                        onChange={(e) => applyFilters({ minPrice: e.target.value ? Number(e.target.value) : '' })}
+                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-[#CCAD8A]"
+                      />
+                      <span className="text-gray-400">-</span>
+                      <input
+                        type="number"
+                        placeholder="Do"
+                        value={maxPrice === '' ? '' : maxPrice}
+                        onChange={(e) => applyFilters({ maxPrice: e.target.value ? Number(e.target.value) : '' })}
+                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-[#CCAD8A]"
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
               {!mobileFiltersOpen && (
@@ -443,7 +531,7 @@ export default function CategoryShop() {
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filtered.map((p) => (
+              {paginated.map((p) => (
                 <a
                   key={p.id}
                   href={`#/produkt/${p.id}`}
@@ -481,6 +569,47 @@ export default function CategoryShop() {
                 </a>
               ))}
             </div>
+
+            {maxPage > 1 && (
+              <div className="mt-8 flex justify-center gap-2">
+                <button
+                  disabled={page <= 1}
+                  onClick={() => {
+                    applyFilters({ page: page - 1 });
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="px-4 py-2 border border-gray-200 rounded-xl bg-white text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition"
+                >
+                  Předchozí
+                </button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: maxPage }).map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        applyFilters({ page: i + 1 });
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className={`w-10 h-10 rounded-xl border text-sm font-bold flex items-center justify-center transition-colors ${
+                        page === i + 1 ? 'border-[#132333] bg-[#132333] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  disabled={page >= maxPage}
+                  onClick={() => {
+                    applyFilters({ page: page + 1 });
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="px-4 py-2 border border-gray-200 rounded-xl bg-white text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition"
+                >
+                  Další
+                </button>
+              </div>
+            )}
           </main>
         </div>
       </div>

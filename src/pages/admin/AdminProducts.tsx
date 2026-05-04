@@ -1,8 +1,11 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { Plus, Search, Edit2, Trash2, Terminal, ChevronDown, ChevronRight, X, ExternalLink } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Terminal, ChevronDown, ChevronRight, X, ExternalLink, Table, Image as ImageIcon } from 'lucide-react';
 import { computeDisplayPriceCzk, formatCzk, toMoneyNumber } from '../../lib/money';
 import { CENIK_IMPORT_COMMANDS } from '../../lib/cenikImportCommands';
 import RichTextEditor from '../../components/RichTextEditor';
+import AdminPriceMatrixModal from '../../components/admin/AdminPriceMatrixModal';
+import AdminMassEditBar from '../../components/admin/AdminMassEditBar';
+import { uploadImage } from '../../lib/imageHelpers';
 
 interface DimConstraints {
   width_mm_min: number;
@@ -33,6 +36,8 @@ interface Product {
   price_mode?: string | null;
   fabric_group?: number | null;
   validation_profile?: string | null;
+  hidden?: boolean;
+  gallery?: string[];
 }
 
 /** Formulář v modalu — prázdné numerické pole jako '' před odesláním na API. */
@@ -43,6 +48,7 @@ type AdminProductForm = Partial<Omit<Product, 'width_mm_min' | 'width_mm_max' | 
   height_mm_max?: number | '' | null;
   max_area_m2?: number | '' | null;
   fabric_group?: number | string | '' | null;
+  gallery?: string[];
 };
 
 function formatDimsMm(p: Product): string {
@@ -68,6 +74,9 @@ export default function AdminProducts() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [importHelpOpen, setImportHelpOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
+
+  const [priceMatrixProduct, setPriceMatrixProduct] = useState<Product | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | number | null>(null);
@@ -89,13 +98,16 @@ export default function AdminProducts() {
     price_mode: '',
     fabric_group: '',
     validation_profile: '',
+    hidden: false,
+    gallery: [],
   });
 
   const fetchData = async () => {
     setFetchError(null);
     try {
+      const adminToken = localStorage.getItem('adminToken') || '';
       const [resProd, resCat] = await Promise.all([
-        fetch('/api/products'),
+        fetch('/api/admin/products', { headers: { Authorization: `Bearer ${adminToken}` } }),
         fetch('/api/categories'),
       ]);
       const dataProd = await resProd.json();
@@ -188,6 +200,8 @@ export default function AdminProducts() {
         price_mode: product.price_mode ?? '',
         fabric_group: product.fabric_group != null ? String(product.fabric_group) : '',
         validation_profile: product.validation_profile ?? '',
+        hidden: Boolean(product.hidden),
+        gallery: product.gallery || [],
       });
     } else {
       setEditingId(null);
@@ -209,6 +223,8 @@ export default function AdminProducts() {
         price_mode: '',
         fabric_group: '',
         validation_profile: '',
+        hidden: false,
+        gallery: [],
       });
     }
     setIsModalOpen(true);
@@ -311,8 +327,69 @@ export default function AdminProducts() {
       )
     : products;
 
+  const handleDeleteSelected = async () => {
+    if (!confirm(`Opravdu chcete smazat ${selectedIds.size} produktů?`)) return;
+    const adminToken = localStorage.getItem('adminToken') || '';
+    let successCount = 0;
+    for (const id of selectedIds) {
+      const res = await fetch(`/api/admin/products/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      if (res.ok) successCount++;
+    }
+    alert(`Smazáno ${successCount} z ${selectedIds.size} produktů.`);
+    setSelectedIds(new Set());
+    fetchData();
+  };
+
+  const handleSetHiddenStatus = async (hidden: boolean) => {
+    const adminToken = localStorage.getItem('adminToken') || '';
+    let successCount = 0;
+    for (const id of selectedIds) {
+      const p = products.find(x => x.id === id);
+      if (!p) continue;
+      // Partial update via existing PUT endpoint requires us to send all fields.
+      // So we will reconstruct the product form data.
+      const payload = {
+        title: p.title,
+        category: p.category,
+        price: p.price,
+        oldPrice: p.oldPrice,
+        badge: p.badge,
+        img: p.img,
+        desc: p.desc,
+        supplier_markup_percent: p.supplier_markup_percent,
+        commission_percent: p.commission_percent,
+        ...p.dimension_constraints,
+        price_mode: p.price_mode,
+        fabric_group: p.fabric_group,
+        validation_profile: p.validation_profile,
+        gallery: p.gallery,
+        hidden
+      };
+      const res = await fetch(`/api/admin/products/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) successCount++;
+    }
+    alert(`Změněno ${successCount} z ${selectedIds.size} produktů.`);
+    setSelectedIds(new Set());
+    fetchData();
+  };
+
   return (
     <div className="max-w-7xl mx-auto">
+      <AdminMassEditBar
+        selectedCount={selectedIds.size}
+        onClear={() => setSelectedIds(new Set())}
+        onDelete={handleDeleteSelected}
+        onHide={() => handleSetHiddenStatus(true)}
+        onShow={() => handleSetHiddenStatus(false)}
+      />
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-bold text-[#132333]">Produkty a Ceníky</h1>
@@ -394,6 +471,20 @@ export default function AdminProducts() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50 text-gray-500 text-sm border-b border-gray-100">
+                <th className="py-4 px-6 font-semibold w-12">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 rounded border-gray-300 text-[#CCAD8A] focus:ring-[#CCAD8A]"
+                    checked={filteredProducts.length > 0 && selectedIds.size === filteredProducts.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedIds(new Set(filteredProducts.map(p => p.id)));
+                      } else {
+                        setSelectedIds(new Set());
+                      }
+                    }}
+                  />
+                </th>
                 <th className="py-4 px-6 font-semibold">Produkt</th>
                 <th className="py-4 px-6 font-semibold">Kategorie</th>
                 <th className="py-4 px-6 font-semibold">Rozměry (mm)</th>
@@ -406,7 +497,20 @@ export default function AdminProducts() {
             </thead>
             <tbody className="divide-y divide-gray-100 text-[#132333] font-medium text-sm">
               {filteredProducts.map((prod) => (
-                <tr key={prod.id} className="hover:bg-gray-50/50 transition-colors">
+                <tr key={prod.id} className={`hover:bg-gray-50/50 transition-colors ${prod.hidden ? 'opacity-50 grayscale-[50%]' : ''}`}>
+                  <td className="py-4 px-6">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 rounded border-gray-300 text-[#CCAD8A] focus:ring-[#CCAD8A]"
+                      checked={selectedIds.has(prod.id)}
+                      onChange={(e) => {
+                        const next = new Set(selectedIds);
+                        if (e.target.checked) next.add(prod.id);
+                        else next.delete(prod.id);
+                        setSelectedIds(next);
+                      }}
+                    />
+                  </td>
                   <td className="py-4 px-6">
                     <div className="flex items-center gap-4">
                       <img
@@ -415,9 +519,12 @@ export default function AdminProducts() {
                         className="w-12 h-12 rounded object-cover border border-gray-200 shrink-0"
                       />
                       <div>
-                        <span className="font-bold block">{prod.title}</span>
+                        <span className="font-bold inline-flex items-center gap-2">
+                          {prod.title}
+                          {prod.hidden && <span className="bg-gray-200 text-gray-600 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase">Skryto</span>}
+                        </span>
                         {prod.price_mode && (
-                          <span className="text-xs text-gray-400 font-normal">{prod.price_mode}</span>
+                          <span className="text-xs text-gray-400 font-normal block">{prod.price_mode}</span>
                         )}
                       </div>
                     </div>
@@ -438,6 +545,16 @@ export default function AdminProducts() {
                     >
                       <ExternalLink size={18} />
                     </a>
+                    {prod.price_mode && prod.price_mode !== 'fixed' && (
+                      <button
+                        type="button"
+                        onClick={() => setPriceMatrixProduct(prod)}
+                        title="Upravit ceník"
+                        className="p-2 text-gray-400 hover:text-blue-500 transition-colors rounded-lg hover:bg-blue-50"
+                      >
+                        <Table size={18} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => handleOpenModal(prod)}
@@ -459,6 +576,15 @@ export default function AdminProducts() {
           </table>
         </div>
       </div>
+
+      {priceMatrixProduct && (
+        <AdminPriceMatrixModal
+          productId={priceMatrixProduct.id}
+          productTitle={priceMatrixProduct.title}
+          priceMode={priceMatrixProduct.price_mode || null}
+          onClose={() => setPriceMatrixProduct(null)}
+        />
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-[#132333]/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -573,15 +699,76 @@ export default function AdminProducts() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">URL obrázku</label>
-                  <input
-                    required
-                    type="text"
-                    value={formData.img || ''}
-                    onChange={(e) => setFormData({ ...formData, img: e.target.value })}
-                    placeholder="https://..."
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
-                  />
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Obrázek (URL nebo nahrát)</label>
+                  <div className="flex gap-2">
+                    <input
+                      required
+                      type="text"
+                      value={formData.img || ''}
+                      onChange={(e) => setFormData({ ...formData, img: e.target.value })}
+                      placeholder="https://..."
+                      className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
+                    />
+                    <label className="cursor-pointer bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center font-medium shadow-sm whitespace-nowrap">
+                      Nahrát
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            const url = await uploadImage(file);
+                            setFormData(prev => ({ ...prev, img: url }));
+                          } catch (err) {
+                            console.error(err);
+                            alert("Chyba při nahrávání obrázku.");
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Galerie obrázků</label>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {formData.gallery?.map((gUrl, idx) => (
+                      <div key={idx} className="relative group w-24 h-24 border border-gray-200 rounded shrink-0 overflow-hidden">
+                        <img src={gUrl} alt="gallery" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setFormData(p => ({ ...p, gallery: p.gallery?.filter((_, i) => i !== idx) }))}
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    <label className="w-24 h-24 flex flex-col items-center justify-center cursor-pointer bg-gray-50 border-2 border-dashed border-gray-300 rounded hover:bg-gray-100 transition-colors">
+                      <Plus className="text-gray-400 mb-1" size={20} />
+                      <span className="text-[10px] text-gray-500 font-medium">Přidat fotku</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={async (e) => {
+                          const files = Array.from(e.target.files || []);
+                          if (!files.length) return;
+                          try {
+                            const promises = files.map(f => uploadImage(f));
+                            const urls = await Promise.all(promises);
+                            setFormData(prev => ({ ...prev, gallery: [...(prev.gallery || []), ...urls] }));
+                          } catch (err) {
+                            console.error(err);
+                            alert("Chyba při nahrávání obrázků.");
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
                 </div>
               </div>
               <div>
@@ -592,6 +779,18 @@ export default function AdminProducts() {
                     onChange={(val) => setFormData({ ...formData, desc: val })}
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-3 cursor-pointer p-4 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition">
+                  <input
+                    type="checkbox"
+                    checked={formData.hidden || false}
+                    onChange={(e) => setFormData({ ...formData, hidden: e.target.checked })}
+                    className="w-5 h-5 text-[#CCAD8A] border-gray-300 rounded focus:ring-[#CCAD8A]"
+                  />
+                  <span className="font-semibold text-gray-700">Skrýt produkt na e-shopu (viditelný jen v administraci)</span>
+                </label>
               </div>
 
               <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/80">

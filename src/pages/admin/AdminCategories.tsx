@@ -1,6 +1,7 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { Plus, Edit2, Trash2, X, Terminal, ChevronDown, ChevronRight } from 'lucide-react';
 import { CENIK_IMPORT_COMMANDS } from '../../lib/cenikImportCommands';
+import { uploadImage } from '../../lib/imageHelpers';
 
 interface Category {
   id?: number;
@@ -224,14 +225,35 @@ export default function AdminCategories() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">URL Obrázku</label>
-                <input required
-                  type="text" 
-                  value={formData.img} 
-                  onChange={e => setFormData({...formData, img: e.target.value})}
-                  placeholder="https://..."
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
-                />
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Obrázek (URL nebo nahrát)</label>
+                <div className="flex gap-2">
+                  <input required
+                    type="text" 
+                    value={formData.img} 
+                    onChange={e => setFormData({...formData, img: e.target.value})}
+                    placeholder="https://..."
+                    className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
+                  />
+                  <label className="cursor-pointer bg-white border border-gray-200 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center font-medium shadow-sm whitespace-nowrap">
+                    Nahrát
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          const url = await uploadImage(file);
+                          setFormData(prev => ({ ...prev, img: url }));
+                        } catch (err) {
+                          console.error(err);
+                          alert("Chyba při nahrávání obrázku.");
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
               </div>
 
               <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">

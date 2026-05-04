@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { ShoppingCart } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { formatCzk } from '../lib/money';
@@ -11,6 +12,7 @@ type Product = {
   price: number;
   img: string;
   desc: string;
+  gallery?: string[];
   validation_profile?: string | null;
   dimension_constraints?: {
     width_mm_min: number;
@@ -35,6 +37,7 @@ export default function ProductDetail({ productId }: { productId: string }) {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mainImg, setMainImg] = useState<string | null>(null);
   const [widthMm, setWidthMm] = useState('');
   const [heightMm, setHeightMm] = useState('');
   const [fabric, setFabric] = useState('');
@@ -171,17 +174,45 @@ export default function ProductDetail({ productId }: { productId: string }) {
 
   const dim = product.dimension_constraints;
   const prof = product.validation_profile;
+  const plainDesc = product.desc.replace(/<[^>]+>/g, '').substring(0, 150) + '...';
 
   return (
     <div className="flex-grow container mx-auto px-6 py-12">
+      <Helmet>
+        <title>{product.title} | E-shop Qapi</title>
+        <meta name="description" content={plainDesc} />
+      </Helmet>
       <a href="#/kategorie" className="text-sm text-[#CCAD8A] font-bold hover:underline mb-8 inline-block">
         ← Katalog
       </a>
       <div className="grid lg:grid-cols-2 gap-12 items-start">
         <div>
-          <div className="rounded-2xl overflow-hidden border border-gray-100 bg-gray-50 aspect-[4/3]">
-            <img src={product.img} alt={product.title} className="w-full h-full object-cover" />
+          <div className="rounded-2xl overflow-hidden border border-gray-100 bg-gray-50 aspect-[4/3] mb-4">
+            <img src={mainImg || product.img} alt={product.title} className="w-full h-full object-cover transition-opacity duration-300" />
           </div>
+          {product.gallery && product.gallery.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              <button
+                onClick={() => setMainImg(product.img)}
+                className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-colors ${
+                  (mainImg || product.img) === product.img ? 'border-[#CCAD8A]' : 'border-transparent hover:border-gray-300'
+                }`}
+              >
+                <img src={product.img} className="w-full h-full object-cover" alt="Thumb" />
+              </button>
+              {product.gallery.map((gImg: string, idx: number) => (
+                <button
+                  key={idx}
+                  onClick={() => setMainImg(gImg)}
+                  className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-colors ${
+                    mainImg === gImg ? 'border-[#CCAD8A]' : 'border-transparent hover:border-gray-300'
+                  }`}
+                >
+                  <img src={gImg} className="w-full h-full object-cover" alt={`Thumb ${idx + 1}`} />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div>
           <span className="text-[#CCAD8A] text-xs font-bold uppercase tracking-widest">

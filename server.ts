@@ -133,6 +133,8 @@ async function ensureSchema(db: Pool) {
     `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS price_mode VARCHAR(32) DEFAULT 'matrix_cell'`,
     `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS fabric_group INTEGER`,
     `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS validation_profile VARCHAR(32)`,
+    `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS hidden BOOLEAN DEFAULT FALSE`,
+    `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS gallery JSONB DEFAULT '[]'::jsonb`,
   ]) {
     await db.query(sql).catch(() => {});
   }
@@ -205,6 +207,15 @@ async function ensureSchema(db: Pool) {
       body_html TEXT NOT NULL DEFAULT '',
       video_url TEXT,
       sort_order INTEGER NOT NULL DEFAULT 0
+    );
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS "Image" (
+      id VARCHAR(64) PRIMARY KEY,
+      mime_type VARCHAR(100) NOT NULL,
+      data TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
 
@@ -305,7 +316,7 @@ async function startServer() {
     message: { error: "Příliš mnoho výpočtů cen. Zkuste to za chvíli." },
   });
 
-  app.use(express.json({ limit: "2mb" }));
+  app.use(express.json({ limit: "50mb" }));
 
   if (IS_PROD) {
     if (!process.env.ADMIN_PASSWORD) {
@@ -393,6 +404,56 @@ async function startServer() {
     if (!process.env.DATABASE_URL) {
       return res.status(500).json({ error: "Missing DATABASE_URL" });
     }
+    await withDb(res, async (db) => {
+      try {
+        const result = await db.query('SELECT * FROM "Product" WHERE hidden IS NOT TRUE');
+        res.json(result.rows.map((r) => mapProductRow(r as Record<string, unknown>)));
+      } catch {
+        res.json([]);
+      }
+    });
+  });
+
+  app.get("/api/images/:id", async (req, res) => {
+    await withDb(res, async (db) => {
+      try {
+        const id = req.params.id;
+        const result = await db.query('SELECT mime_type, data FROM "Image" WHERE id = $1', [id]);
+        if (result.rows.length === 0) {
+          res.status(404).send("Not found");
+          return;
+        }
+        const img = result.rows[0] as { mime_type: string; data: string };
+        const base64Data = img.data.replace(/^data:image\/\w+;base64,/, "");
+        const buffer = Buffer.from(base64Data, "base64");
+        res.setHeader("Content-Type", img.mime_type);
+        res.setHeader("Cache-Control", "public, max-age=31536000"); // 1 year cache
+        res.send(buffer);
+      } catch {
+        res.status(500).send("Server error");
+      }
+    });
+  });
+
+  app.post("/api/admin/images", requireAdmin, async (req, res) => {
+    await withDb(res, async (db) => {
+      try {
+        const { mimeType, data } = req.body;
+        if (!mimeType || !data) {
+          return res.status(400).json({ error: "Chybí mimeType nebo data." });
+        }
+        const cryptoPath = await import("crypto");
+        const id = "img_" + cryptoPath.default.randomBytes(8).toString("hex");
+        await db.query('INSERT INTO "Image" (id, mime_type, data) VALUES ($1, $2, $3)', [id, mimeType, data]);
+        res.json({ id, url: \`/api/images/\${id}\` });
+      } catch (e: any) {
+        console.error("Upload error:", e);
+        res.status(500).json({ error: "Nastala chyba při ukládání obrázku." });
+      }
+    });
+  });
+
+  app.get("/api/admin/products", requireAdmin, async (req, res) => {
     await withDb(res, async (db) => {
       try {
         const result = await db.query('SELECT * FROM "Product"');
@@ -861,6 +922,70 @@ async function startServer() {
     });
   });
 
+  app.get("/api/admin/products/:id/tiers", requireAdmin, async (req, res) => {
+    await withDb(res, async (db) => {
+      try {
+        const id = req.params.id;
+        if (!id) {
+          res.status(400).json({ error: "Neplatné ID" });
+          return;
+        }
+        const r = await db.query(
+          `SELECT * FROM "ProductHeightPriceTier" WHERE product_id = $1
+           ORDER BY sort_order ASC, height_mm_max ASC`,
+          [id]
+        );
+        res.json(r.rows);
+      } catch {
+        res.status(500).json({ error: "Server error" });
+      }
+    });
+  });
+
+  app.put("/api/admin/products/:id/tiers", requireAdmin, async (req, res) => {
+    await withDb(res, async (db) => {
+      const id = req.params.id;
+      const rows = req.body?.rows;
+      if (!id || !Array.isArray(rows)) {
+        res.status(400).json({ error: "Neplatná data (očekávám pole rows)." });
+        return;
+      }
+      const client = await db.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query('DELETE FROM "ProductHeightPriceTier" WHERE product_id = $1', [id]);
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i] as Record<string, unknown>;
+          const hMin = Number(row.height_mm_min ?? row.heightMmMin);
+          const hMax = Number(row.height_mm_max ?? row.heightMmMax);
+          const price = Number(row.price_per_m2_czk ?? row.pricePerM2Czk);
+          const sort = Number(row.sort_order ?? row.sortOrder ?? i);
+          if (!Number.isFinite(hMin) || !Number.isFinite(hMax) || !Number.isFinite(price)) {
+            continue;
+          }
+          await client.query(
+            `INSERT INTO "ProductHeightPriceTier" (product_id, height_mm_min, height_mm_max, price_per_m2_czk, sort_order)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [id, Math.round(hMin), Math.round(hMax), Math.round(price), Math.round(sort)]
+          );
+        }
+        await client.query("COMMIT");
+        const r = await client.query(
+          `SELECT * FROM "ProductHeightPriceTier" WHERE product_id = $1
+           ORDER BY sort_order ASC, height_mm_max ASC`,
+          [id]
+        );
+        res.json(r.rows);
+      } catch (e) {
+        await client.query("ROLLBACK").catch(() => {});
+        console.error(e);
+        res.status(500).json({ error: "Uložení ceníku selhalo." });
+      } finally {
+        client.release();
+      }
+    });
+  });
+
   app.get("/api/admin/customers", requireAdmin, async (req, res) => {
     await withDb(res, async (db) => {
       try {
@@ -896,10 +1021,12 @@ async function startServer() {
             : "matrix_cell";
         const fabric_group_ins = optIntCol(bodyRec, "fabric_group");
         const validation_profile_ins = optStrCol(bodyRec, "validation_profile");
+        const hidden_ins = Boolean(bodyRec.hidden);
+        const gallery_ins = JSON.stringify(Array.isArray(bodyRec.gallery) ? bodyRec.gallery : []);
         const result = await db.query(
           `INSERT INTO "Product" (id, name, "categoryId", "priceCzk", "oldPrice", badge, image, description, supplier_markup_percent, commission_percent,
-            width_mm_min, width_mm_max, height_mm_min, height_mm_max, max_area_m2, price_mode, fabric_group, validation_profile)
-           VALUES ('prd_' || substr(md5(random()::text), 1, 10), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING *`,
+            width_mm_min, width_mm_max, height_mm_min, height_mm_max, max_area_m2, price_mode, fabric_group, validation_profile, hidden, gallery)
+           VALUES ('prd_' || substr(md5(random()::text), 1, 10), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING *`,
           [
             title,
             category,
@@ -918,6 +1045,8 @@ async function startServer() {
             price_mode_ins,
             fabric_group_ins,
             validation_profile_ins,
+            hidden_ins,
+            gallery_ins,
           ]
         );
         res.json(mapProductRow(result.rows[0] as Record<string, unknown>));
@@ -951,11 +1080,13 @@ async function startServer() {
             : "matrix_cell";
         const fabric_group_upd = optIntCol(bodyRec, "fabric_group");
         const validation_profile_upd = optStrCol(bodyRec, "validation_profile");
+        const hidden_upd = Boolean(bodyRec.hidden);
+        const gallery_upd = JSON.stringify(Array.isArray(bodyRec.gallery) ? bodyRec.gallery : []);
         const result = await db.query(
           `UPDATE "Product" SET name=$1, "categoryId"=$2, "priceCzk"=$3, "oldPrice"=$4, badge=$5, image=$6, description=$7,
             supplier_markup_percent=$9, commission_percent=$10,
             width_mm_min=$11, width_mm_max=$12, height_mm_min=$13, height_mm_max=$14, max_area_m2=$15,
-            price_mode=$16, fabric_group=$17, validation_profile=$18
+            price_mode=$16, fabric_group=$17, validation_profile=$18, hidden=$19, gallery=$20
            WHERE id=$8 RETURNING *`,
           [
             title,
@@ -976,6 +1107,8 @@ async function startServer() {
             price_mode_upd,
             fabric_group_upd,
             validation_profile_upd,
+            hidden_upd,
+            gallery_upd,
           ]
         );
         if (!result.rows[0]) {

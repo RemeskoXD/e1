@@ -5,6 +5,8 @@ import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
 import Youtube from '@tiptap/extension-youtube';
+import Image from '@tiptap/extension-image';
+import { uploadImage } from '../lib/imageHelpers';
 
 type Props = {
   value: string;
@@ -22,6 +24,9 @@ const extensions = [
     width: 640,
     height: 360,
     HTMLAttributes: { class: 'rounded-lg max-w-full w-full aspect-video' },
+  }),
+  Image.configure({
+    HTMLAttributes: { class: 'max-w-full h-auto rounded inline-block my-2' },
   }),
 ];
 
@@ -68,6 +73,24 @@ export default function RichTextEditor({ value, onChange }: Props) {
     const url = window.prompt('Odkaz na YouTube (např. https://www.youtube.com/watch?v=…):', 'https://');
     if (!url?.trim()) return;
     editor.chain().focus().setYoutubeVideo({ src: url.trim() }).run();
+  };
+
+  const addImage = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const url = await uploadImage(file);
+        editor.chain().focus().setImage({ src: url }).run();
+      } catch (err) {
+        console.error(err);
+        alert('Chyba při nahrávání obrázku.');
+      }
+    };
+    input.click();
   };
 
   const btn = (active: boolean) =>
@@ -117,6 +140,9 @@ export default function RichTextEditor({ value, onChange }: Props) {
         <span className="w-px bg-gray-200 mx-1 self-stretch" />
         <button type="button" className={btn(editor.isActive('link'))} onClick={addLink}>
           Odkaz
+        </button>
+        <button type="button" className={btn(false)} onClick={addImage}>
+          Obrázek
         </button>
         <button type="button" className={btn(false)} onClick={addYoutube}>
           YouTube

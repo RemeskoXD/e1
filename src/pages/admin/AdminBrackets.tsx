@@ -26,7 +26,8 @@ export default function AdminBrackets() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch('/api/products');
+        const adminToken = localStorage.getItem('adminToken') || '';
+        const res = await fetch('/api/admin/products', { headers: { Authorization: `Bearer ${adminToken}` } });
         const data = await res.json();
         if (Array.isArray(data)) {
           setProducts(
