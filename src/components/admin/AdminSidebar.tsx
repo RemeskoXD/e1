@@ -9,6 +9,7 @@ import {
   Grid3x3,
   X,
   Ruler,
+  Palette,
 } from 'lucide-react';
 
 export default function AdminSidebar({
@@ -28,6 +29,7 @@ export default function AdminSidebar({
     { path: '#/admin/products', icon: <Package size={20} />, label: 'Produkty a Ceníky' },
     { path: '#/admin/brackets', icon: <Grid3x3 size={20} />, label: 'Mřížka ceníku' },
     { path: '#/admin/categories', icon: <Folders size={20} />, label: 'Kategorie' },
+    { path: '#/admin/fabric-groups', icon: <Palette size={20} />, label: 'Skupiny látek' },
     { path: '#/admin/customers', icon: <Users size={20} />, label: 'Zákazníci' },
     { path: '#/admin/settings', icon: <Settings size={20} />, label: 'Nastavení e-shopu' },
     { path: '#/admin/measure-guide', icon: <Ruler size={20} />, label: 'Jak zaměřit' },

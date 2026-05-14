@@ -19,6 +19,7 @@ import AdminLayout from './components/admin/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminProducts from './pages/admin/AdminProducts';
 import AdminCategories from './pages/admin/AdminCategories';
+import AdminFabricGroups from './pages/admin/AdminFabricGroups';
 import AdminOrders from './pages/admin/AdminOrders';
 import AdminOrderDetail from './pages/admin/AdminOrderDetail';
 import AdminCustomers from './pages/admin/AdminCustomers';
@@ -92,6 +93,7 @@ export default function App() {
               {currentPath === '#/admin' && <AdminDashboard />}
               {currentPath === '#/admin/products' && <AdminProducts />}
               {currentPath === '#/admin/categories' && <AdminCategories />}
+              {currentPath === '#/admin/fabric-groups' && <AdminFabricGroups />}
               {currentPath === '#/admin/orders' && <AdminOrders />}
               {currentPath === '#/admin/customers' && <AdminCustomers />}
               {currentPath === '#/admin/settings' && <AdminSettings />}

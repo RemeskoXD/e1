@@ -190,7 +190,7 @@ export default function AdminOrderDetail({ orderId }: { orderId: number }) {
           </p>
           <p className="text-2xl font-black text-[#132333] mt-2">
             {order.total_amount != null ? `${formatCzk(order.total_amount)} Kč` : '—'}{' '}
-            <span className="text-sm font-normal text-gray-500">bez DPH</span>
+            <span className="text-sm font-normal text-gray-500">vč. DPH</span>
           </p>
         </div>
       </div>

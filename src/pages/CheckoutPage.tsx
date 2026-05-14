@@ -94,7 +94,7 @@ export default function CheckoutPage() {
     <div className="flex-grow container mx-auto px-6 py-12 max-w-xl">
       <h1 className="text-3xl font-extrabold text-[#132333] mb-2">Dokončení objednávky</h1>
       <p className="text-gray-500 text-sm mb-8">
-        Ceny jsou bez DPH. Celkem: <strong>{formatCzk(subtotalCzk)} Kč</strong>
+        Ceny jsou vč. DPH. Celkem: <strong>{formatCzk(subtotalCzk)} Kč</strong>
       </p>
 
       <form onSubmit={submit} className="space-y-4">

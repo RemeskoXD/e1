@@ -83,7 +83,7 @@ export default function AdminDashboard() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-[#132333]">Přehled</h1>
         <p className="text-gray-500 mt-1">
-          Čísla z databáze v reálném čase. Graf zobrazuje objednávky a tržby bez DPH za posledních 7 dní.
+          Čísla z databáze v reálném čase. Graf zobrazuje objednávky a tržby vč. DPH za posledních 7 dní.
         </p>
       </div>
 
@@ -95,7 +95,7 @@ export default function AdminDashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {[
-          { title: 'Obrat objednávek (bez DPH)', value: totalLabel, icon: <DollarSign size={24} /> },
+          { title: 'Obrat objednávek (vč. DPH)', value: totalLabel, icon: <DollarSign size={24} /> },
           { title: 'Počet objednávek', value: ordersLabel, icon: <ShoppingCart size={24} /> },
           { title: 'Zákazníci v DB', value: customersLabel, icon: <Users size={24} /> },
           {
@@ -126,7 +126,7 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
         <div className="xl:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <h2 className="text-xl font-bold text-[#132333] mb-2">Tržby a počet objednávek (7 dní)</h2>
-          <p className="text-sm text-gray-500 mb-6">Sloupce = počet objednávek, čára = součet bez DPH (Kč).</p>
+          <p className="text-sm text-gray-500 mb-6">Sloupce = počet objednávek, čára = součet vč. DPH (Kč).</p>
           <div className="h-[360px] w-full">
             {chartData.length === 0 ? (
               <div className="h-full flex items-center justify-center text-gray-400 text-sm">

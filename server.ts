@@ -73,7 +73,11 @@ function pgPoolOptions(): ConstructorParameters<typeof Pool>[0] {
     sslFromUrl || sslFromEnv
       ? { rejectUnauthorized: false }
       : undefined;
-  return { connectionString, ssl };
+  return { 
+    connectionString, 
+    ssl, 
+    connectionTimeoutMillis: 5000 
+  };
 }
 
 async function ensureSchema(db: Pool) {
@@ -83,6 +87,12 @@ async function ensureSchema(db: Pool) {
       name VARCHAR(255) NOT NULL,
       count VARCHAR(255),
       img TEXT
+    );
+    CREATE TABLE IF NOT EXISTS "FabricGroup" (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      surcharge NUMERIC(10,2) NOT NULL DEFAULT 0,
+      colors JSONB DEFAULT '[]'::jsonb
     );
     CREATE TABLE IF NOT EXISTS "Product" (
       id SERIAL PRIMARY KEY,
@@ -135,6 +145,7 @@ async function ensureSchema(db: Pool) {
     `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS validation_profile VARCHAR(32)`,
     `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS hidden BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS gallery JSONB DEFAULT '[]'::jsonb`,
+    `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS extras JSONB DEFAULT '[]'::jsonb`,
   ]) {
     await db.query(sql).catch(() => {});
   }
@@ -142,7 +153,7 @@ async function ensureSchema(db: Pool) {
   await db.query(`
     CREATE TABLE IF NOT EXISTS "ProductHeightPriceTier" (
       id SERIAL PRIMARY KEY,
-      product_id TEXT NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
+      product_id INTEGER NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
       height_mm_min INTEGER NOT NULL,
       height_mm_max INTEGER NOT NULL,
       price_per_m2_czk INTEGER NOT NULL,
@@ -154,7 +165,7 @@ async function ensureSchema(db: Pool) {
   await db.query(`
     CREATE TABLE IF NOT EXISTS "ProductPriceBracket" (
       id SERIAL PRIMARY KEY,
-      product_id TEXT NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
+      product_id INTEGER NOT NULL REFERENCES "Product"(id) ON DELETE CASCADE,
       width_mm_max INTEGER NOT NULL,
       height_mm_max INTEGER NOT NULL,
       base_price_czk INTEGER NOT NULL,
@@ -175,7 +186,7 @@ async function ensureSchema(db: Pool) {
     CREATE TABLE IF NOT EXISTS "OrderItem" (
       id SERIAL PRIMARY KEY,
       order_id INTEGER NOT NULL REFERENCES "Order"(id) ON DELETE CASCADE,
-      product_id TEXT NOT NULL REFERENCES "Product"(id),
+      product_id INTEGER NOT NULL REFERENCES "Product"(id),
       product_title VARCHAR(500),
       width_mm INTEGER NOT NULL,
       height_mm INTEGER NOT NULL,
@@ -440,12 +451,13 @@ async function startServer() {
       try {
         const { mimeType, data } = req.body;
         if (!mimeType || !data) {
-          return res.status(400).json({ error: "Chybí mimeType nebo data." });
+          res.status(400).json({ error: "Chybí mimeType nebo data." });
+          return;
         }
         const cryptoPath = await import("crypto");
         const id = "img_" + cryptoPath.default.randomBytes(8).toString("hex");
         await db.query('INSERT INTO "Image" (id, mime_type, data) VALUES ($1, $2, $3)', [id, mimeType, data]);
-        res.json({ id, url: \`/api/images/\${id}\` });
+        res.json({ id, url: `/api/images/${id}` });
       } catch (e: any) {
         console.error("Upload error:", e);
         res.status(500).json({ error: "Nastala chyba při ukládání obrázku." });
@@ -1024,9 +1036,9 @@ async function startServer() {
         const hidden_ins = Boolean(bodyRec.hidden);
         const gallery_ins = JSON.stringify(Array.isArray(bodyRec.gallery) ? bodyRec.gallery : []);
         const result = await db.query(
-          `INSERT INTO "Product" (id, name, "categoryId", "priceCzk", "oldPrice", badge, image, description, supplier_markup_percent, commission_percent,
+          `INSERT INTO "Product" (title, category, price, "oldPrice", badge, img, "desc", supplier_markup_percent, commission_percent,
             width_mm_min, width_mm_max, height_mm_min, height_mm_max, max_area_m2, price_mode, fabric_group, validation_profile, hidden, gallery)
-           VALUES ('prd_' || substr(md5(random()::text), 1, 10), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING *`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING *`,
           [
             title,
             category,
@@ -1083,7 +1095,7 @@ async function startServer() {
         const hidden_upd = Boolean(bodyRec.hidden);
         const gallery_upd = JSON.stringify(Array.isArray(bodyRec.gallery) ? bodyRec.gallery : []);
         const result = await db.query(
-          `UPDATE "Product" SET name=$1, "categoryId"=$2, "priceCzk"=$3, "oldPrice"=$4, badge=$5, image=$6, description=$7,
+          `UPDATE "Product" SET title=$1, category=$2, price=$3, "oldPrice"=$4, badge=$5, img=$6, "desc"=$7,
             supplier_markup_percent=$9, commission_percent=$10,
             width_mm_min=$11, width_mm_max=$12, height_mm_min=$13, height_mm_max=$14, max_area_m2=$15,
             price_mode=$16, fabric_group=$17, validation_profile=$18, hidden=$19, gallery=$20
@@ -1173,6 +1185,66 @@ async function startServer() {
         await db.query('DELETE FROM "Category" WHERE id=$1', [id]);
         res.json({ success: true });
       } catch {
+        res.status(500).json({ error: "Server error" });
+      }
+    });
+  });
+
+  app.get("/api/fabric-groups", async (req, res) => {
+    if (!process.env.DATABASE_URL) {
+      return res.status(500).json({ error: "Missing DATABASE_URL" });
+    }
+    await withDb(res, async (db) => {
+      try {
+        const result = await db.query('SELECT * FROM "FabricGroup"');
+        res.json(result.rows);
+      } catch {
+        res.json([]);
+      }
+    });
+  });
+
+  app.post("/api/admin/fabric-groups", requireAdmin, async (req, res) => {
+    await withDb(res, async (db) => {
+      try {
+        const { name, surcharge, colors } = req.body;
+        const result = await db.query(
+          'INSERT INTO "FabricGroup" (name, surcharge, colors) VALUES ($1, $2, $3) RETURNING *',
+          [name, surcharge || 0, JSON.stringify(colors || [])]
+        );
+        res.json(result.rows[0]);
+      } catch (e: any) {
+        console.error(e);
+        res.status(500).json({ error: "Server error" });
+      }
+    });
+  });
+
+  app.put("/api/admin/fabric-groups/:id", requireAdmin, async (req, res) => {
+    await withDb(res, async (db) => {
+      try {
+        const { id } = req.params;
+        const { name, surcharge, colors } = req.body;
+        const result = await db.query(
+          'UPDATE "FabricGroup" SET name=$1, surcharge=$2, colors=$3 WHERE id=$4 RETURNING *',
+          [name, surcharge || 0, JSON.stringify(colors || []), id]
+        );
+        res.json(result.rows[0]);
+      } catch (e: any) {
+        console.error(e);
+        res.status(500).json({ error: "Server error" });
+      }
+    });
+  });
+
+  app.delete("/api/admin/fabric-groups/:id", requireAdmin, async (req, res) => {
+    await withDb(res, async (db) => {
+      try {
+        const { id } = req.params;
+        await db.query('DELETE FROM "FabricGroup" WHERE id=$1', [id]);
+        res.json({ success: true });
+      } catch (e: any) {
+        console.error(e);
         res.status(500).json({ error: "Server error" });
       }
     });

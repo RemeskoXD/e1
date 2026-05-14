@@ -29,7 +29,7 @@ export default function LegalTerms() {
           <p>
             Objednávka odeslaná přes formulář v e-shopu je návrhem kupní smlouvy. Smlouva je uzavřena
             potvrzením objednávky ze strany prodávajícího (e-mailem nebo jiným srozumitelným způsobem).
-            Ceny uvedené u zboží jsou v českých korunách bez DPH, pokud není uvedeno jinak.
+            Ceny uvedené u zboží jsou v českých korunách vč. DPH, pokud není uvedeno jinak.
           </p>
         </section>
         <section>

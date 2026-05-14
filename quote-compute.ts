@@ -122,6 +122,19 @@ export async function computeProductQuote(
   const supplier = product.supplier_markup_percent ?? 0;
   const commission = product.commission_percent ?? 0;
 
+  // New logic for Fabric Group surcharge per m2
+  let extraSurchargeFromFabricGroup = 0;
+  if (body.fabric_group_id) {
+    const fgRes = await db.query('SELECT surcharge FROM "FabricGroup" WHERE id = $1', [body.fabric_group_id]);
+    if (fgRes.rows[0]) {
+      const perM2 = parseFloat(fgRes.rows[0].surcharge);
+      if (!isNaN(perM2) && perM2 > 0) {
+        const areaM2 = (wR * hR) / 1_000_000;
+        extraSurchargeFromFabricGroup = perM2 * areaM2;
+      }
+    }
+  }
+
   if (priceMode === "m2_height_tiers") {
     const tierRes = await db.query(
       `SELECT * FROM "ProductHeightPriceTier"
@@ -139,7 +152,7 @@ export async function computeProductQuote(
     const tier = tierRes.rows[0] as Record<string, unknown>;
     const pricePerM2 = num(tier, "price_per_m2_czk", "pricePerM2Czk");
     const areaM2 = (wR * hR) / 1_000_000;
-    const baseCatalog = Math.round(areaM2 * pricePerM2);
+    const baseCatalog = Math.round(areaM2 * pricePerM2) + Math.round(extraSurchargeFromFabricGroup);
     const total_czk = computeRetailCzk(baseCatalog, supplier, commission);
     return {
       ok: true,
@@ -195,6 +208,13 @@ export async function computeProductQuote(
       radix_lamela_note = "Lamela 40: +5 % k tabulkové ceně (bez DPH), dle ceníku RADIX.";
     }
   }
+
+  let pliseNote: string | undefined;
+  if (matrixProfile === "plise") {
+    const model = body?.model ? String(body.model) : "PM1";
+    pliseNote = `Model ${model}`;
+  }
+
   if (matrixProfile === "screen_roleta_union_l" && screenUnionQuote) {
     if (screenUnionQuote.noFabric) {
       baseCatalogCzk = Math.round(baseCatalogCzk * 0.75);
@@ -209,7 +229,25 @@ export async function computeProductQuote(
       screenUnionCatalogNotes.push("Spodní profil v RAL: +10 %.");
     }
   }
-  const total_czk = computeRetailCzk(baseCatalogCzk, supplier, commission);
+
+  let extraSurchargesTotal = 0;
+  if (Array.isArray(body?.selected_extras_ids)) {
+    const productExtras = Array.isArray(product.extras) ? product.extras : [];
+    for (const ec of productExtras) {
+      if (body.selected_extras_ids.includes(ec.id)) {
+        extraSurchargesTotal += Number(ec.price) || 0;
+        screenUnionCatalogNotes.push(`+ ${ec.name} (${Number(ec.price)} Kč/ks)`);
+      }
+    }
+  }
+
+  // Přidáme příplatek za barvu/skupinu látek
+  if (extraSurchargeFromFabricGroup > 0) {
+    baseCatalogCzk += Math.round(extraSurchargeFromFabricGroup);
+    screenUnionCatalogNotes.push(`Příplatek za vybranou barvu/látku z ceníku: +${Math.round(extraSurchargeFromFabricGroup)} Kč.`);
+  }
+
+  const total_czk = computeRetailCzk(baseCatalogCzk, supplier, commission) + extraSurchargesTotal;
   const bw = br.rows[0]
     ? num(br.rows[0] as Record<string, unknown>, "width_mm_max", "widthMmMax")
     : wR;
@@ -223,6 +261,7 @@ export async function computeProductQuote(
 
   const catalogNoteParts: string[] = [];
   if (radix_lamela_note) catalogNoteParts.push(radix_lamela_note);
+  if (pliseNote) catalogNoteParts.push(pliseNote);
   if (screenUnionCatalogNotes.length) catalogNoteParts.push(screenUnionCatalogNotes.join(" "));
 
   return {

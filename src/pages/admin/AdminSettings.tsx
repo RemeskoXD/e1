@@ -11,8 +11,7 @@ export default function AdminSettings() {
         <section>
           <h2 className="font-bold text-[#132333] mb-2">DPH a zobrazení cen</h2>
           <p className="text-sm text-gray-600 leading-relaxed">
-            V katalogu a u objednávek se pracuje s cenami <strong>bez DPH</strong> (základní sazba 21 %
-            dle platné legislativy). Na faktuře musí být DPH vždy uvedeno zvlášť podle vašeho
+            V katalogu a u objednávek se zjednodušeně pracuje rovnou s cenami <strong>vč. DPH</strong>. Na faktuře musí být DPH vždy uvedeno zvlášť podle vašeho
             účetního nastavení.
           </p>
         </section>

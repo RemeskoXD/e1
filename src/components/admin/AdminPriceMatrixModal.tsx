@@ -85,7 +85,7 @@ export default function AdminPriceMatrixModal({ productId, productTitle, priceMo
           const data = await res.json();
           if (res.ok) setTiers(data);
           
-          if (priceMode === 'fixed' || priceMode === 'm2_area') {
+          if (priceMode === 'm2_area') {
              // For purely informational fixed base price 
              const bracketsRes = await fetch(`/api/admin/products/${productId}/brackets`, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('adminToken')}` },
@@ -401,7 +401,7 @@ export default function AdminPriceMatrixModal({ productId, productTitle, priceMo
                 </>
               ) : (
                 <div className="flex bg-amber-50 text-amber-800 p-4 rounded-xl border border-amber-200 items-center justify-center text-center">
-                  Tento produkt používá pevnou cenu ({formatCzk(brackets[0]?.base_price_czk || 0)} Kč základ). Nemá plošný nebo rozměrový ceník.
+                  Tento produkt používá pevnou cenu ({formatCzk(basePriceFixed)} Kč základ). Nemá plošný nebo rozměrový ceník.
                 </div>
               )}
             </div>

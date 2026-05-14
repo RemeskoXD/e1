@@ -186,7 +186,7 @@ export default function AdminBrackets() {
       <h1 className="text-3xl font-bold text-[#132333] mb-2">Ceníkové buňky (mřížka)</h1>
       <p className="text-gray-500 mb-6">
         Úprava tabulky <code className="bg-gray-100 px-1 rounded">ProductPriceBracket</code> pro
-        vybraný produkt. Každý řádek = maximální šířka a výška buňky a základní cena bez DPH.
+        vybraný produkt. Každý řádek = maximální šířka a výška buňky a základní cena vč. DPH.
       </p>
 
       {error && (

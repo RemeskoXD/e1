@@ -33,7 +33,7 @@ export default function CartPage() {
             <div className="flex-grow min-w-0">
               <h2 className="font-bold text-[#132333] truncate">{line.title}</h2>
               <p className="text-sm text-gray-500">
-                {line.widthMm} × {line.heightMm} mm · {formatCzk(line.unitPriceCzk)} Kč / ks bez DPH
+                {line.widthMm} × {line.heightMm} mm · {formatCzk(line.unitPriceCzk)} Kč / ks vč. DPH
               </p>
               <div className="flex items-center gap-3 mt-3">
                 <label className="text-xs text-gray-500">Ks</label>
@@ -64,7 +64,7 @@ export default function CartPage() {
       </div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t border-gray-200 pt-6">
         <div>
-          <p className="text-sm text-gray-500">Celkem bez DPH</p>
+          <p className="text-sm text-gray-500">Celkem vč. DPH</p>
           <p className="text-2xl font-black text-[#132333]">{formatCzk(subtotalCzk)} Kč</p>
         </div>
         <a

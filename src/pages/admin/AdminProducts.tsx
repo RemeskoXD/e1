@@ -38,6 +38,7 @@ interface Product {
   validation_profile?: string | null;
   hidden?: boolean;
   gallery?: string[];
+  extras?: { id: string; name: string; price: number }[];
 }
 
 /** Formulář v modalu — prázdné numerické pole jako '' před odesláním na API. */
@@ -49,6 +50,7 @@ type AdminProductForm = Partial<Omit<Product, 'width_mm_min' | 'width_mm_max' | 
   max_area_m2?: number | '' | null;
   fabric_group?: number | string | '' | null;
   gallery?: string[];
+  extras?: { id: string; name: string; price: number }[];
 };
 
 function formatDimsMm(p: Product): string {
@@ -69,7 +71,7 @@ function formatDimsMm(p: Product): string {
 
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<{ id: string; title: string; slug: string }[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string; slug?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -100,6 +102,7 @@ export default function AdminProducts() {
     validation_profile: '',
     hidden: false,
     gallery: [],
+    extras: [],
   });
 
   const fetchData = async () => {
@@ -202,6 +205,7 @@ export default function AdminProducts() {
         validation_profile: product.validation_profile ?? '',
         hidden: Boolean(product.hidden),
         gallery: product.gallery || [],
+        extras: product.extras || [],
       });
     } else {
       setEditingId(null);
@@ -225,6 +229,7 @@ export default function AdminProducts() {
         validation_profile: '',
         hidden: false,
         gallery: [],
+        extras: [],
       });
     }
     setIsModalOpen(true);
@@ -271,6 +276,7 @@ export default function AdminProducts() {
             formData.validation_profile === '' || formData.validation_profile == null
               ? null
               : formData.validation_profile,
+          extras: formData.extras || [],
         }),
       });
 
@@ -458,7 +464,7 @@ export default function AdminProducts() {
               placeholder="Vyhledat produkt…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] focus:bg-white transition-all"
+              className="w-full pl-10 pr-4 py-2 bg-gray-50 text-gray-900 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] focus:bg-white transition-all"
             />
           </div>
           <div className="text-sm font-semibold text-gray-500">
@@ -529,7 +535,7 @@ export default function AdminProducts() {
                       </div>
                     </div>
                   </td>
-                  <td className="py-4 px-6 text-gray-500">{categories.find(c => c.id === prod.category)?.title || prod.category}</td>
+                  <td className="py-4 px-6 text-gray-500">{prod.category}</td>
                   <td className="py-4 px-6 text-xs text-gray-600 whitespace-nowrap">{formatDimsMm(prod)}</td>
                   <td className="py-4 px-6">{formatCzk(prod.price)} Kč</td>
                   <td className="py-4 px-6">{toMoneyNumber(prod.supplier_markup_percent)} %</td>
@@ -611,7 +617,7 @@ export default function AdminProducts() {
                     type="text"
                     value={formData.title || ''}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
+                    className="w-full px-4 py-2.5 bg-gray-50 text-gray-900 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
                   />
                 </div>
                 <div>
@@ -620,11 +626,11 @@ export default function AdminProducts() {
                     required
                     value={formData.category || ''}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
+                    className="w-full px-4 py-2.5 bg-gray-50 text-gray-900 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
                   >
                     <option value="" disabled>-- Vyberte kategorii --</option>
                     {categories.map(c => (
-                      <option key={c.id} value={c.id}>{c.title}</option>
+                      <option key={c.id} value={c.name}>{c.name}</option>
                     ))}
                   </select>
                 </div>
@@ -638,7 +644,7 @@ export default function AdminProducts() {
                     onChange={(e) =>
                       setFormData({ ...formData, price: Number(e.target.value) })
                     }
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
+                    className="w-full px-4 py-2.5 bg-gray-50 text-gray-900 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
                   />
                 </div>
                 <div>
@@ -653,7 +659,7 @@ export default function AdminProducts() {
                         oldPrice: e.target.value === '' ? undefined : Number(e.target.value),
                       })
                     }
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
+                    className="w-full px-4 py-2.5 bg-gray-50 text-gray-900 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
                   />
                 </div>
                 <div>
@@ -671,7 +677,7 @@ export default function AdminProducts() {
                       })
                     }
                     placeholder="např. 4,9 u horizontálních žaluzií"
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
+                    className="w-full px-4 py-2.5 bg-gray-50 text-gray-900 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
                   />
                 </div>
                 <div>
@@ -686,8 +692,26 @@ export default function AdminProducts() {
                         commission_percent: Number(e.target.value),
                       })
                     }
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
+                    className="w-full px-4 py-2.5 bg-gray-50 text-gray-900 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
                   />
+                </div>
+                
+                {/* Live Preview */}
+                <div className="md:col-span-2 bg-[#132333]/5 border border-[#132333]/10 p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-bold text-[#132333]">Živý náhled prodejní ceny (Kč vč. DPH)</h3>
+                    <p className="text-xs text-gray-500 mt-1">Zobrazená cena zákazníkovi pro vámi zadaný základ.</p>
+                  </div>
+                  <div className="text-right">
+                    {formData.oldPrice ? (
+                      <div className="text-sm text-gray-400 line-through mb-1">
+                        {formatCzk(Math.round(formData.oldPrice * (1 + (formData.supplier_markup_percent || 0)/100) * (1 + (formData.commission_percent || 0)/100)))} Kč
+                      </div>
+                    ) : null}
+                    <div className="text-3xl font-black text-[#CCAD8A]">
+                      {formatCzk(Math.round((formData.price || 0) * (1 + (formData.supplier_markup_percent || 0)/100) * (1 + (formData.commission_percent || 0)/100)))} Kč
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Štítek (např. Akce, Bestseller)</label>
@@ -695,7 +719,7 @@ export default function AdminProducts() {
                     type="text"
                     value={formData.badge || ''}
                     onChange={(e) => setFormData({ ...formData, badge: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
+                    className="w-full px-4 py-2.5 bg-gray-50 text-gray-900 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A] transition-all"
                   />
                 </div>
                 <div>
@@ -809,7 +833,7 @@ export default function AdminProducts() {
                       onChange={(e) =>
                         setFormData({ ...formData, width_mm_min: e.target.value === '' ? '' : Number(e.target.value) })
                       }
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                      className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg"
                     />
                   </div>
                   <div>
@@ -820,7 +844,7 @@ export default function AdminProducts() {
                       onChange={(e) =>
                         setFormData({ ...formData, width_mm_max: e.target.value === '' ? '' : Number(e.target.value) })
                       }
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                      className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg"
                     />
                   </div>
                   <div>
@@ -831,7 +855,7 @@ export default function AdminProducts() {
                       onChange={(e) =>
                         setFormData({ ...formData, height_mm_min: e.target.value === '' ? '' : Number(e.target.value) })
                       }
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                      className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg"
                     />
                   </div>
                   <div>
@@ -842,7 +866,7 @@ export default function AdminProducts() {
                       onChange={(e) =>
                         setFormData({ ...formData, height_mm_max: e.target.value === '' ? '' : Number(e.target.value) })
                       }
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                      className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg"
                     />
                   </div>
                   <div>
@@ -857,7 +881,7 @@ export default function AdminProducts() {
                           max_area_m2: e.target.value === '' ? '' : Number(e.target.value),
                         })
                       }
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                      className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg"
                     />
                   </div>
                 </div>
@@ -873,7 +897,7 @@ export default function AdminProducts() {
                         setFormData({ ...formData, price_mode: e.target.value })
                       }
                       placeholder="matrix_cell"
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                      className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg"
                     />
                   </div>
                   <div>
@@ -893,7 +917,7 @@ export default function AdminProducts() {
                           fabric_group: e.target.value === '' ? '' : Number(e.target.value),
                         })
                       }
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                      className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg"
                     />
                   </div>
                   <div>
@@ -910,15 +934,78 @@ export default function AdminProducts() {
                       onChange={(e) =>
                         setFormData({ ...formData, validation_profile: e.target.value })
                       }
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg"
+                      className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg"
                     />
                   </div>
                 </div>
               </div>
 
+              {/* Extras (Příplatkové věci) */}
+              <div className="mt-8 border-t border-gray-100 pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-900">Příplatkové položky</h3>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({
+                      ...prev,
+                      extras: [...(prev.extras || []), { id: Date.now().toString(), name: 'Nová položka', price: 0 }]
+                    }))}
+                    className="text-sm font-medium text-[#CCAD8A] hover:text-[#b89b7c] flex items-center gap-1"
+                  >
+                    + Přidat položku
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {formData.extras?.map(extra => (
+                    <div key={extra.id} className="flex gap-3 items-center p-3 border border-gray-100 rounded-xl bg-gray-50/50">
+                      <div className="flex-[2]">
+                        <input
+                          type="text"
+                          placeholder="Název (např. Montáž)"
+                          value={extra.name}
+                          onChange={(e) => setFormData(prev => ({
+                            ...prev,
+                            extras: (prev.extras || []).map(ex => ex.id === extra.id ? { ...ex, name: e.target.value } : ex)
+                          }))}
+                          className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A]"
+                        />
+                      </div>
+                      <div className="flex-1 max-w-[120px]">
+                        <input
+                          type="number"
+                          placeholder="Cena (Kč)"
+                          value={extra.price}
+                          onChange={(e) => setFormData(prev => ({
+                            ...prev,
+                            extras: (prev.extras || []).map(ex => ex.id === extra.id ? { ...ex, price: Number(e.target.value) } : ex)
+                          }))}
+                          className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#CCAD8A]"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({
+                          ...prev,
+                          extras: (prev.extras || []).filter(ex => ex.id !== extra.id)
+                        }))}
+                        className="p-2 text-gray-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors"
+                        title="Odebrat položku"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  ))}
+                  {(!formData.extras || formData.extras.length === 0) && (
+                    <div className="text-sm text-gray-400 p-4 text-center bg-gray-50 rounded-xl border border-gray-100 border-dashed">
+                      Žádné příplatkové položky nejsou nastaveny.
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <p className="text-sm text-gray-500">
                 Zobrazená cena zákazníkovi: základ × (1 + navýšení/100) × (1 + provize/100), zaokrouhleno na celé Kč.
-                Katalogové částky jsou bez DPH, pokud to tak máte v popisu uvedené.
+                Výsledné částky jsou zobrazeny vč. DPH (konečná cena jako v matrixu, v závislosti na vašem ceníku).
               </p>
 
               <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">

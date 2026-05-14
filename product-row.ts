@@ -88,6 +88,7 @@ export function mapProductRow(row: Record<string, unknown>) {
     validation_profile: optStrCol(row, "validation_profile"),
     hidden: Boolean(row.hidden),
     gallery: Array.isArray(row.gallery) ? row.gallery : [],
+    extras: Array.isArray(row.extras) ? row.extras : [],
   };
 }
 

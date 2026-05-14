@@ -556,7 +556,9 @@ export default function CategoryShop() {
                     <h2 className="text-lg font-bold text-[#132333] mb-2 line-clamp-2 group-hover:text-[#CCAD8A] transition-colors">
                       {p.title}
                     </h2>
-                    <p className="text-sm text-gray-500 line-clamp-2 mb-4 flex-grow">{p.desc}</p>
+                    <p className="text-sm text-gray-500 line-clamp-2 mb-4 flex-grow">
+                      {p.desc ? p.desc.replace(/<[^>]+>/g, '') : ''}
+                    </p>
                     <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-50">
                       <span className="text-lg font-black text-[#132333]">
                         od {formatCzk(customerPrice(p))} Kč
