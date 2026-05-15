@@ -464,7 +464,18 @@ export default function ProductDetail({ productId }: { productId: string }) {
                               : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
                           }`}
                         >
-                          {g.name} {g.surcharge_percent > 0 ? `(+${g.surcharge_percent} %)` : ''}
+                          <div className="flex items-center gap-2">
+                            <span>{g.name}</span>
+                            {g.surcharge_percent > 0 && (
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider ${
+                                selectedFabricGroupConfigIndex === idx 
+                                  ? 'bg-[#CCAD8A]/20 text-[#CCAD8A]' 
+                                  : 'bg-gray-100 text-gray-500'
+                              }`}>
+                                +{g.surcharge_percent} %
+                              </span>
+                            )}
+                          </div>
                         </button>
                       ))}
                     </div>

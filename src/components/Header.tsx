@@ -18,12 +18,16 @@ export default function Header({
   const isONas = pathBase === '#/o-nas';
 
   return (
-    <header className="bg-[#132333] text-white fixed top-0 w-full z-50">
-      <div className="container mx-auto px-6 py-4 flex items-center justify-between gap-6">
+    <header className="bg-[#132333] text-white sticky top-0 w-full z-50">
+      <div className="container mx-auto px-6 pt-4 pb-[2px] flex items-center justify-between gap-6">
         
         {/* Logo */}
-        <a href="#/" className="text-3xl font-bold tracking-tight text-white cursor-pointer shrink-0">
-          Qapi
+        <a href="#/" className="shrink-0 flex items-center">
+          <img 
+            src="https://web2.itnahodinu.cz/QAPI/Logo-Bile.webp" 
+            alt="Qapi" 
+            className="h-20 md:h-24 w-auto object-contain" 
+          />
         </a>
 
         {/* Search Bar */}
@@ -65,7 +69,7 @@ export default function Header({
       </div>
 
       {/* Navigation Bar */}
-      <div className="border-t border-white/10 bg-[#0F1D2B]">
+      <div className="bg-[#0F1D2B] relative -mb-[1px]">
         <div className="container mx-auto px-6 overflow-x-auto hide-scroll-bar">
           <nav className="flex items-center space-x-8 py-3 text-sm font-medium whitespace-nowrap">
             <a

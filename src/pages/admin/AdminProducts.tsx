@@ -806,114 +806,166 @@ export default function AdminProducts() {
                 </div>
               </div>
 
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Možnosti barev / dekorů (volitelně i s obrázkem)</label>
-                  <p className="text-xs text-gray-500 mb-3">
-                    Pokud neurčíte žádné barvy a produkt nepoužívá vlastní konfigurátor, nebudou se barvy nabízet. Zákazník uvidí barvy jako obdélníky s fotkou (pokud je nahraná) nebo jako textové tlačítko.
-                  </p>
-                  
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {formData.colors?.map((colorObj, idx) => {
-                      const cName = typeof colorObj === 'string' ? colorObj : colorObj.name;
-                      const cImg = typeof colorObj === 'string' ? undefined : colorObj.img;
-                      return (
-                        <div key={idx} className="flex items-center gap-3 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-sm group">
-                          {cImg && (
-                            <img src={cImg} alt={cName} className="w-10 h-10 object-cover rounded shadow-sm" />
-                          )}
-                          <span className="font-semibold text-gray-800">{cName}</span>
-                          <button
-                            type="button"
-                            onClick={() => setFormData(p => ({ ...p, colors: p.colors?.filter((_, i) => i !== idx) }))}
-                            className="text-red-500 hover:text-red-700 p-1.5 rounded-md hover:bg-red-50 transition-colors"
-                            title="Odstranit"
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  
-                  <div className="flex items-center gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200">
-                    <input
-                      type="text"
-                      id="newColorInput"
-                      placeholder="Název (např. Dub zlatý)"
-                      className="flex-[2] px-4 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CCAD8A] outline-none"
-                    />
-                    <label className="cursor-pointer bg-white border border-gray-300 text-gray-700 font-semibold px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center shadow-sm">
-                      <span className="text-sm">Vybrat foto</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        id="newColorFileInput"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const label = e.target.closest('label');
-                            if (label) {
-                              const span = label.querySelector('span');
-                              if (span) span.textContent = 'Foto vybráno';
+                <div className="md:col-span-2 border-b border-gray-100 pb-4 mb-4">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Režim konfigurace barev/látek</label>
+                   <div className="flex flex-col sm:flex-row gap-4">
+                     <label className="flex items-center gap-2 text-sm text-gray-800 cursor-pointer bg-gray-50 px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-100 w-full">
+                       <input 
+                         type="radio" 
+                         name="colorMode" 
+                         checked={!formData.fabric_groups_config || formData.fabric_groups_config.length === 0}
+                         onChange={() => {
+                            if (formData.fabric_groups_config && formData.fabric_groups_config.length > 0) {
+                              if (window.confirm("Opravdu chcete přepnout na jednoduchý vzorník? Stávající rozdělení do skupin bude smazáno.")) {
+                                setFormData(p => ({ ...p, fabric_groups_config: [] }));
+                              }
                             }
-                          }
-                        }}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const nameInput = document.getElementById('newColorInput') as HTMLInputElement;
-                        const fileInput = document.getElementById('newColorFileInput') as HTMLInputElement;
-                        const nameVal = nameInput.value.trim();
-                        if (!nameVal) return alert('Zadejte název barvy nebo dekoru.');
-                        
-                        let fileUrl = undefined;
-                        const file = fileInput.files?.[0];
-                        if (file) {
-                          try {
-                            const btn = document.activeElement as HTMLButtonElement;
-                            const prevTxt = btn.textContent;
-                            btn.textContent = 'Nahrávám...';
-                            btn.disabled = true;
-                            fileUrl = await uploadImage(file);
-                            btn.textContent = prevTxt;
-                            btn.disabled = false;
-                          } catch (err) {
-                            console.error(err);
-                            alert("Chyba při nahrávání obrázku barvy.");
-                            return;
-                          }
-                        }
-                        
-                        setFormData(p => ({
-                          ...p,
-                          colors: [...(p.colors || []), { name: nameVal, img: fileUrl }] as any
-                        }));
-                        
-                        // clear inputs
-                        nameInput.value = '';
-                        fileInput.value = '';
-                        const label = fileInput.closest('label');
-                        if (label) {
-                          const span = label.querySelector('span');
-                          if (span) span.textContent = 'Vybrat foto';
-                        }
-                      }}
-                      className="px-5 py-2 bg-[#132333] text-white text-sm font-semibold rounded-lg hover:bg-gray-800 transition-colors shadow-sm"
-                    >
-                      Přidat do vzorníku
-                    </button>
-                  </div>
+                         }}
+                         className="text-[#CCAD8A] focus:ring-[#CCAD8A]"
+                       />
+                       <div>
+                         <div className="font-semibold">Jednoduchý vzorník</div>
+                         <div className="text-xs text-gray-500">Všechny barvy za jednu cenu přímo v konfigurátoru</div>
+                       </div>
+                     </label>
+                     <label className="flex items-center gap-2 text-sm text-gray-800 cursor-pointer bg-gray-50 px-4 py-3 rounded-lg border border-gray-200 hover:bg-gray-100 w-full">
+                       <input 
+                         type="radio" 
+                         name="colorMode" 
+                         checked={!!(formData.fabric_groups_config && formData.fabric_groups_config.length > 0)}
+                         onChange={() => {
+                            if (!formData.fabric_groups_config || formData.fabric_groups_config.length === 0) {
+                              if (formData.colors && formData.colors.length > 0) {
+                                if (!window.confirm("Opravdu chcete přepnout na skupiny látek? Stávající jednoduchý vzorník bude nahrazen.")) {
+                                   return;
+                                }
+                              }
+                              setFormData(p => ({ 
+                                ...p, 
+                                colors: [], 
+                                fabric_groups_config: [{ name: 'Skupina látek 1', surcharge_percent: 0, colors: [] }] 
+                              }));
+                            }
+                         }}
+                         className="text-[#CCAD8A] focus:ring-[#CCAD8A]"
+                       />
+                       <div>
+                         <div className="font-semibold">Skupiny látek (příplatky)</div>
+                         <div className="text-xs text-gray-500">Rozděleno do více skupin, možnost přidat % příplatek</div>
+                       </div>
+                     </label>
+                   </div>
                 </div>
 
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Editor Skupin Látek (s příplatkem a vlastním vzorníkem)</label>
-                  <p className="text-xs text-gray-500 mb-3">Pokud má produkt více skupin látek (např. +10%, +20%), definujte je zde.</p>
-                  <div className="space-y-4">
-                    {formData.fabric_groups_config?.map((group, grpIdx) => (
-                      <div key={grpIdx} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm relative">
+                {(!formData.fabric_groups_config || formData.fabric_groups_config.length === 0) ? (
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Možnosti barev / dekorů (volitelně i s obrázkem)</label>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Pokud neurčíte žádné barvy a produkt nepoužívá vlastní konfigurátor, nebudou se barvy nabízet. Zákazník uvidí barvy jako obdélníky s fotkou (pokud je nahraná) nebo jako textové tlačítko.
+                    </p>
+                    
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {formData.colors?.map((colorObj, idx) => {
+                        const cName = typeof colorObj === 'string' ? colorObj : colorObj.name;
+                        const cImg = typeof colorObj === 'string' ? undefined : colorObj.img;
+                        return (
+                          <div key={idx} className="flex items-center gap-3 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-sm group">
+                            {cImg && (
+                              <img src={cImg} alt={cName} className="w-10 h-10 object-cover rounded shadow-sm" />
+                            )}
+                            <span className="font-semibold text-gray-800">{cName}</span>
+                            <button
+                              type="button"
+                              onClick={() => setFormData(p => ({ ...p, colors: p.colors?.filter((_, i) => i !== idx) }))}
+                              className="text-red-500 hover:text-red-700 p-1.5 rounded-md hover:bg-red-50 transition-colors"
+                              title="Odstranit"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    <div className="flex items-center gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                      <input
+                        type="text"
+                        id="newColorInput"
+                        placeholder="Název (např. Dub zlatý)"
+                        className="flex-[2] px-4 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CCAD8A] outline-none"
+                      />
+                      <label className="cursor-pointer bg-white border border-gray-300 text-gray-700 font-semibold px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center shadow-sm">
+                        <span className="text-sm">Vybrat foto</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          id="newColorFileInput"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const label = e.target.closest('label');
+                              if (label) {
+                                const span = label.querySelector('span');
+                                if (span) span.textContent = 'Foto vybráno';
+                              }
+                            }
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const nameInput = document.getElementById('newColorInput') as HTMLInputElement;
+                          const fileInput = document.getElementById('newColorFileInput') as HTMLInputElement;
+                          const nameVal = nameInput.value.trim();
+                          if (!nameVal) return alert('Zadejte název barvy nebo dekoru.');
+                          
+                          let fileUrl = undefined;
+                          const file = fileInput.files?.[0];
+                          if (file) {
+                            try {
+                              const btn = document.activeElement as HTMLButtonElement;
+                              const prevTxt = btn.textContent;
+                              btn.textContent = 'Nahrávám...';
+                              btn.disabled = true;
+                              fileUrl = await uploadImage(file);
+                              btn.textContent = prevTxt;
+                              btn.disabled = false;
+                            } catch (err) {
+                              console.error(err);
+                              alert("Chyba při nahrávání obrázku barvy.");
+                              return;
+                            }
+                          }
+                          
+                          setFormData(p => ({
+                            ...p,
+                            colors: [...(p.colors || []), { name: nameVal, img: fileUrl }] as any
+                          }));
+                          
+                          // clear inputs
+                          nameInput.value = '';
+                          fileInput.value = '';
+                          const label = fileInput.closest('label');
+                          if (label) {
+                            const span = label.querySelector('span');
+                            if (span) span.textContent = 'Vybrat foto';
+                          }
+                        }}
+                        className="px-5 py-2 bg-[#132333] text-white text-sm font-semibold rounded-lg hover:bg-gray-800 transition-colors shadow-sm"
+                      >
+                        Přidat do vzorníku
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Editor Skupin Látek (s příplatkem a vlastním vzorníkem)</label>
+                    <p className="text-xs text-gray-500 mb-3">Pokud má produkt více skupin látek (např. +10%, +20%), definujte je zde.</p>
+                    <div className="space-y-4">
+                      {formData.fabric_groups_config?.map((group, grpIdx) => (
+                        <div key={grpIdx} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm relative">
                         <button
                           type="button"
                           onClick={() => setFormData(p => ({
@@ -1052,8 +1104,9 @@ export default function AdminProducts() {
                     <Plus size={16} /> Prázdná skupina látek
                   </button>
                 </div>
+              )}
 
-              <div>
+              <div className="md:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Popis produktu</label>
                 <div className="border-t border-b sm:border border-gray-200 sm:rounded-lg overflow-hidden bg-white">
                   <RichTextEditor

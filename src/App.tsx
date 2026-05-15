@@ -47,7 +47,7 @@ function StorefrontRoutes({ currentPath }: { currentPath: string }) {
   const productId = parseProductId(currentPath);
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans flex flex-col pt-[136px]">
+    <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
       <Header cartCount={itemCount} currentPath={currentPath} />
       {currentPath === '#/' && <Home />}
       {currentPath === '#/reference' && <References />}
