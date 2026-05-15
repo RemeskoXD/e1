@@ -21,7 +21,13 @@ type Product = {
     height_mm_max: number;
     max_area_m2: number | null;
   } | null;
+  colors?: string[] | { name: string; img?: string }[];
   extras?: { id: string; name: string; price: number }[];
+  fabric_groups_config?: {
+    name: string;
+    surcharge_percent: number;
+    colors: { name: string; img?: string }[];
+  }[] | null;
 };
 
 type QuoteRes = {
@@ -65,6 +71,7 @@ export default function ProductDetail({ productId }: { productId: string }) {
   const [quoting, setQuoting] = useState(false);
   const [fabricGroups, setFabricGroups] = useState<any[]>([]);
   const [selectedExtras, setSelectedExtras] = useState<string[]>([]);
+  const [selectedFabricGroupConfigIndex, setSelectedFabricGroupConfigIndex] = useState<number | null>(null);
 
   useEffect(() => {
     fetch('/api/fabric-groups')
@@ -113,6 +120,7 @@ export default function ProductDetail({ productId }: { productId: string }) {
     const prof = product?.validation_profile;
     if (color) {
       o.barva = color;
+      o.color = color;
     }
     if (prof === 'plise') {
       o.model = pliseModel;
@@ -123,6 +131,9 @@ export default function ProductDetail({ productId }: { productId: string }) {
     }
     if (selectedFabricGroupId) {
       o.fabric_group_id = selectedFabricGroupId;
+    }
+    if (selectedFabricGroupConfigIndex !== null) {
+      o.fabric_group_config_index = selectedFabricGroupConfigIndex;
     }
     if (prof === 'venkovni_roleta_radix') {
       o.lamela = lamela.trim() || '39';
@@ -428,36 +439,126 @@ export default function ProductDetail({ productId }: { productId: string }) {
                 </div>
               </div>
 
-              {/* Color Palette */}
-              <div>
-                <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-500">2</span>
-                  Vyberte barvu profilu/síťoviny
-                </h3>
-                <div className="flex flex-wrap gap-3">
-                  {COMMON_COLORS.map((c) => (
-                    <button
-                      key={c.name}
-                      onClick={() => setColor(c.name)}
-                      title={c.name}
-                      className={`relative w-10 h-10 rounded-full border-2 transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#CCAD8A] ${
-                        color === c.name ? 'scale-110 border-[#CCAD8A] shadow-md' : 'border-gray-200 hover:scale-105'
-                      }`}
-                      style={{ backgroundColor: c.hex }}
-                    >
-                      {color === c.name && (
-                        <span className="absolute inset-0 flex items-center justify-center text-current drop-shadow-md"
-                              style={{ color: ['#ffffff', '#f5f5dc', '#fffff0'].includes(c.hex.toLowerCase()) ? '#000' : '#fff' }}>
-                          <Check size={16} strokeWidth={3} />
-                        </span>
+              {/* Color Palette or Fabric Groups */}
+              {product?.fabric_groups_config && product.fabric_groups_config.length > 0 ? (
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-500">2</span>
+                    Vyberte látku
+                  </h3>
+                  
+                  {/* Select group */}
+                  <div className="mb-4">
+                    <label className="block text-xs font-semibold text-gray-600 mb-2">1. Skupina látek</label>
+                    <div className="flex flex-wrap gap-2">
+                      {product.fabric_groups_config.map((g, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            setSelectedFabricGroupConfigIndex(idx);
+                            setColor(''); // let user pick new color from group
+                          }}
+                          className={`px-4 py-2 text-sm font-medium rounded-xl border-2 transition-all duration-200 outline-none ${
+                            selectedFabricGroupConfigIndex === idx
+                              ? 'border-[#CCAD8A] bg-[#CCAD8A]/10 text-[#CCAD8A] shadow-sm'
+                              : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                          }`}
+                        >
+                          {g.name} {g.surcharge_percent > 0 ? `(+${g.surcharge_percent} %)` : ''}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {/* Show color palette for selected group */}
+                  {selectedFabricGroupConfigIndex !== null && product.fabric_groups_config[selectedFabricGroupConfigIndex] && (
+                    <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                      <label className="block text-xs font-semibold text-gray-600 mb-3">2. Látka ze skupiny</label>
+                      {product.fabric_groups_config[selectedFabricGroupConfigIndex].colors.length > 0 ? (
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                          {product.fabric_groups_config[selectedFabricGroupConfigIndex].colors.map((cNameOrObj: any) => {
+                            const cName = typeof cNameOrObj === 'string' ? cNameOrObj : cNameOrObj.name;
+                            const cImg = typeof cNameOrObj === 'string' ? undefined : cNameOrObj.img;
+                            return (
+                              <button
+                                key={cName}
+                                onClick={() => setColor(cName)}
+                                className={`relative group overflow-hidden border-2 transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#CCAD8A] ${
+                                  color === cName ? 'border-[#CCAD8A] shadow-md scale-105' : 'border-gray-200 hover:border-[#132333]'
+                                } ${cImg ? 'w-full aspect-square rounded-xl flex items-center justify-center bg-gray-50' : 'w-full px-2 py-3 text-sm font-medium rounded-xl text-gray-700 bg-white'}`}
+                                title={cName}
+                              >
+                                {cImg ? (
+                                  <>
+                                    <img src={cImg} alt={cName} className="w-full h-full object-cover" />
+                                    <div className="absolute inset-x-0 bottom-0 bg-black/60 pt-2 pb-1.5 px-1 flex items-end">
+                                      <span className="text-white text-[10px] sm:text-[11px] leading-tight font-medium w-full text-center drop-shadow-sm">{cName}</span>
+                                    </div>
+                                    {color === cName && (
+                                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center pb-4">
+                                        <Check className="text-white drop-shadow-md shadow-black" size={24} strokeWidth={3} />
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span>{cName}</span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 italic">Pro tuto skupinu nejsou nahrány žádné obrázky látek.</p>
                       )}
-                    </button>
-                  ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-400 mt-2">
+                    {color ? `Vybrána látka: ${color}` : 'Vyberte látku kliknutím na vzorník.'}
+                  </p>
                 </div>
-                <p className="text-xs text-gray-400 mt-2">
-                  {color ? `Vybrána barva: ${color}` : 'Vyberte barvu kliknutím na vzorník.'}
-                </p>
-              </div>
+              ) : product?.colors && product.colors.length > 0 ? (
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs text-gray-500">2</span>
+                    Vyberte barvu profilu/látky
+                  </h3>
+                  <div className="flex flex-wrap gap-3">
+                    {product.colors.map((c: any) => {
+                      const cName = typeof c === 'string' ? c : c.name;
+                      const cImg = typeof c === 'string' ? undefined : c.img;
+                      return (
+                        <button
+                          key={cName}
+                          onClick={() => setColor(cName)}
+                          className={`relative group overflow-hidden border-2 transition-all duration-200 ease-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#CCAD8A] ${
+                            color === cName ? 'border-[#CCAD8A] shadow-md scale-105' : 'border-gray-200 hover:border-[#132333]'
+                          } ${cImg ? 'w-20 h-16 rounded-xl' : 'px-4 py-2 text-sm font-medium rounded-xl text-gray-700 bg-white'}`}
+                          title={cName}
+                        >
+                          {cImg ? (
+                            <>
+                              <img src={cImg} alt={cName} className="w-full h-full object-cover" />
+                              <div className="absolute inset-x-0 bottom-0 bg-black/60 pt-2 pb-1 px-1 min-h-[50%] flex items-end">
+                                <span className="text-white text-[10px] sm:text-xs leading-none font-medium truncate w-full text-center drop-shadow-sm">{cName}</span>
+                              </div>
+                              {color === cName && (
+                                <div className="absolute inset-0 bg-black/20 flex items-center justify-center pb-3">
+                                  <Check className="text-white drop-shadow-md shadow-black" size={24} strokeWidth={3} />
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            cName
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-2">
+                    {color ? `Vybrána barva: ${color}` : 'Vyberte barvu kliknutím na vzorník.'}
+                  </p>
+                </div>
+              ) : null}
 
               {/* Specific Options */}
               {(prof === 'textile_zaluzie' || prof === 'screen_roleta_union_l') && (

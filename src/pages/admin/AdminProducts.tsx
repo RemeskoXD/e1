@@ -15,6 +15,12 @@ interface DimConstraints {
   max_area_m2: number | null;
 }
 
+export interface FabricGroupConfigItem {
+  name: string;
+  surcharge_percent: number;
+  colors: { name: string; img?: string }[];
+}
+
 interface Product {
   id: number | string;
   title: string;
@@ -38,7 +44,9 @@ interface Product {
   validation_profile?: string | null;
   hidden?: boolean;
   gallery?: string[];
+  colors?: { name: string; img?: string }[];
   extras?: { id: string; name: string; price: number }[];
+  fabric_groups_config?: FabricGroupConfigItem[] | null;
 }
 
 /** Formulář v modalu — prázdné numerické pole jako '' před odesláním na API. */
@@ -50,7 +58,9 @@ type AdminProductForm = Partial<Omit<Product, 'width_mm_min' | 'width_mm_max' | 
   max_area_m2?: number | '' | null;
   fabric_group?: number | string | '' | null;
   gallery?: string[];
+  colors?: { name: string; img?: string }[];
   extras?: { id: string; name: string; price: number }[];
+  fabric_groups_config?: FabricGroupConfigItem[] | null;
 };
 
 function formatDimsMm(p: Product): string {
@@ -795,6 +805,254 @@ export default function AdminProducts() {
                   </div>
                 </div>
               </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Možnosti barev / dekorů (volitelně i s obrázkem)</label>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Pokud neurčíte žádné barvy a produkt nepoužívá vlastní konfigurátor, nebudou se barvy nabízet. Zákazník uvidí barvy jako obdélníky s fotkou (pokud je nahraná) nebo jako textové tlačítko.
+                  </p>
+                  
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {formData.colors?.map((colorObj, idx) => {
+                      const cName = typeof colorObj === 'string' ? colorObj : colorObj.name;
+                      const cImg = typeof colorObj === 'string' ? undefined : colorObj.img;
+                      return (
+                        <div key={idx} className="flex items-center gap-3 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-sm group">
+                          {cImg && (
+                            <img src={cImg} alt={cName} className="w-10 h-10 object-cover rounded shadow-sm" />
+                          )}
+                          <span className="font-semibold text-gray-800">{cName}</span>
+                          <button
+                            type="button"
+                            onClick={() => setFormData(p => ({ ...p, colors: p.colors?.filter((_, i) => i !== idx) }))}
+                            className="text-red-500 hover:text-red-700 p-1.5 rounded-md hover:bg-red-50 transition-colors"
+                            title="Odstranit"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  
+                  <div className="flex items-center gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                    <input
+                      type="text"
+                      id="newColorInput"
+                      placeholder="Název (např. Dub zlatý)"
+                      className="flex-[2] px-4 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#CCAD8A] outline-none"
+                    />
+                    <label className="cursor-pointer bg-white border border-gray-300 text-gray-700 font-semibold px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center shadow-sm">
+                      <span className="text-sm">Vybrat foto</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        id="newColorFileInput"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const label = e.target.closest('label');
+                            if (label) {
+                              const span = label.querySelector('span');
+                              if (span) span.textContent = 'Foto vybráno';
+                            }
+                          }
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const nameInput = document.getElementById('newColorInput') as HTMLInputElement;
+                        const fileInput = document.getElementById('newColorFileInput') as HTMLInputElement;
+                        const nameVal = nameInput.value.trim();
+                        if (!nameVal) return alert('Zadejte název barvy nebo dekoru.');
+                        
+                        let fileUrl = undefined;
+                        const file = fileInput.files?.[0];
+                        if (file) {
+                          try {
+                            const btn = document.activeElement as HTMLButtonElement;
+                            const prevTxt = btn.textContent;
+                            btn.textContent = 'Nahrávám...';
+                            btn.disabled = true;
+                            fileUrl = await uploadImage(file);
+                            btn.textContent = prevTxt;
+                            btn.disabled = false;
+                          } catch (err) {
+                            console.error(err);
+                            alert("Chyba při nahrávání obrázku barvy.");
+                            return;
+                          }
+                        }
+                        
+                        setFormData(p => ({
+                          ...p,
+                          colors: [...(p.colors || []), { name: nameVal, img: fileUrl }] as any
+                        }));
+                        
+                        // clear inputs
+                        nameInput.value = '';
+                        fileInput.value = '';
+                        const label = fileInput.closest('label');
+                        if (label) {
+                          const span = label.querySelector('span');
+                          if (span) span.textContent = 'Vybrat foto';
+                        }
+                      }}
+                      className="px-5 py-2 bg-[#132333] text-white text-sm font-semibold rounded-lg hover:bg-gray-800 transition-colors shadow-sm"
+                    >
+                      Přidat do vzorníku
+                    </button>
+                  </div>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Editor Skupin Látek (s příplatkem a vlastním vzorníkem)</label>
+                  <p className="text-xs text-gray-500 mb-3">Pokud má produkt více skupin látek (např. +10%, +20%), definujte je zde.</p>
+                  <div className="space-y-4">
+                    {formData.fabric_groups_config?.map((group, grpIdx) => (
+                      <div key={grpIdx} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm relative">
+                        <button
+                          type="button"
+                          onClick={() => setFormData(p => ({
+                            ...p,
+                            fabric_groups_config: p.fabric_groups_config?.filter((_, i) => i !== grpIdx)
+                          }))}
+                          className="absolute top-4 right-4 text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1">Název skupiny</label>
+                            <input
+                              type="text"
+                              value={group.name}
+                              onChange={(e) => {
+                                const newConfig = [...(formData.fabric_groups_config || [])];
+                                newConfig[grpIdx].name = e.target.value;
+                                setFormData(p => ({ ...p, fabric_groups_config: newConfig }));
+                              }}
+                              className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg focus:ring-[#CCAD8A]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1">Příplatek (%)</label>
+                            <input
+                              type="number"
+                              value={group.surcharge_percent}
+                              onChange={(e) => {
+                                const newConfig = [...(formData.fabric_groups_config || [])];
+                                newConfig[grpIdx].surcharge_percent = Number(e.target.value);
+                                setFormData(p => ({ ...p, fabric_groups_config: newConfig }));
+                              }}
+                              className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg focus:ring-[#CCAD8A]"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Colors in this group */}
+                        <div className="mb-2">
+                          <label className="block text-xs font-semibold text-gray-700 mb-2">Vzorník pro tuto skupinu</label>
+                          <div className="flex flex-wrap gap-2 mb-3">
+                            {group.colors.map((c, cIdx) => (
+                              <div key={cIdx} className="flex items-center gap-2 bg-gray-50 border border-gray-200 px-2 py-1 rounded-md text-xs">
+                                {c.img && <img src={c.img} alt={c.name} className="w-6 h-6 object-cover rounded" />}
+                                <span className="font-medium text-gray-800">{c.name}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newConfig = [...(formData.fabric_groups_config || [])];
+                                    newConfig[grpIdx].colors = newConfig[grpIdx].colors.filter((_, i) => i !== cIdx);
+                                    setFormData(p => ({ ...p, fabric_groups_config: newConfig }));
+                                  }}
+                                  className="text-red-500 hover:text-red-700 p-1"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
+                            <input
+                              type="text"
+                              placeholder="Název barvy/dekoru"
+                              id={`newColorName_grp_${grpIdx}`}
+                              className="flex-[2] px-3 py-1.5 text-xs text-gray-900 border border-gray-200 rounded-md focus:ring-1 focus:ring-[#CCAD8A]"
+                            />
+                            <label className="cursor-pointer bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center">
+                              <span className="text-xs">Foto</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                id={`newColorFile_grp_${grpIdx}`}
+                                onChange={(e) => {
+                                  if (e.target.files?.[0]) {
+                                    const span = e.target.closest('label')?.querySelector('span');
+                                    if (span) span.textContent = 'OK';
+                                  }
+                                }}
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                const nameInput = document.getElementById(`newColorName_grp_${grpIdx}`) as HTMLInputElement;
+                                const fileInput = document.getElementById(`newColorFile_grp_${grpIdx}`) as HTMLInputElement;
+                                const nameVal = nameInput.value.trim();
+                                if (!nameVal) return alert('Zadejte název.');
+                                
+                                let fileUrl = undefined;
+                                const file = fileInput.files?.[0];
+                                if (file) {
+                                  try {
+                                    const btn = e.currentTarget;
+                                    const pt = btn.textContent;
+                                    btn.textContent = '...';
+                                    btn.disabled = true;
+                                    fileUrl = await uploadImage(file);
+                                    btn.textContent = pt;
+                                    btn.disabled = false;
+                                  } catch (err) {
+                                    alert('Chyba nahrávání');
+                                    return;
+                                  }
+                                }
+                                
+                                const newConfig = [...(formData.fabric_groups_config || [])];
+                                newConfig[grpIdx].colors.push({ name: nameVal, img: fileUrl });
+                                setFormData(p => ({ ...p, fabric_groups_config: newConfig }));
+                                
+                                nameInput.value = '';
+                                fileInput.value = '';
+                                const span = fileInput.closest('label')?.querySelector('span');
+                                if (span) span.textContent = 'Foto';
+                              }}
+                              className="px-3 py-1.5 bg-[#132333] text-white text-xs font-semibold rounded-md hover:bg-gray-800"
+                            >
+                              Přidat
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(p => ({
+                      ...p,
+                      fabric_groups_config: [...(p.fabric_groups_config || []), { name: 'Nová skupina', surcharge_percent: 0, colors: [] }]
+                    }))}
+                    className="mt-3 px-4 py-2 bg-gray-100 text-gray-700 text-sm font-semibold rounded-lg border border-gray-200 hover:bg-gray-200 inline-flex items-center gap-2"
+                  >
+                    <Plus size={16} /> Prázdná skupina látek
+                  </button>
+                </div>
+
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Popis produktu</label>
                 <div className="border-t border-b sm:border border-gray-200 sm:rounded-lg overflow-hidden bg-white">

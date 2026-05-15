@@ -135,6 +135,165 @@ export async function computeProductQuote(
     }
   }
 
+  if (priceMode === "vertikalni_zaluzie") {
+    const color = String(body.color || '').trim().toLowerCase();
+    
+    const VERTIKALNI_PRICES = [
+      { maxH: 1500, prices: { g1: 672, g2: 730, g3: 759, g4: 823, g5: 842, g6: 862, g7: 906 } },
+      { maxH: 2000, prices: { g1: 571, g2: 624, g3: 651, g4: 730, g5: 753, g6: 768, g7: 817 } },
+      { maxH: 2400, prices: { g1: 547, g2: 599, g3: 640, g4: 690, g5: 710, g6: 730, g7: 776 } },
+      { maxH: 3000, prices: { g1: 520, g2: 575, g3: 599, g4: 651, g5: 673, g6: 690, g7: 736 } },
+      { maxH: 4000, prices: { g1: 495, g2: 547, g3: 575, g4: 612, g5: 630, g6: 651, g7: 698 } },
+      { maxH: 10000, prices: { g1: 473, g2: 520, g3: 547, g4: 586, g5: 609, g6: 624, g7: 672 } },
+    ];
+    
+    const VERTIKALNI_GROUPS: Record<string, keyof typeof VERTIKALNI_PRICES[0]['prices']> = {
+      'sonia': 'g1',
+      'evelyn': 'g2',
+      'polly': 'g2',
+      'ronnie': 'g3',
+      'carol': 'g4',
+      'inez': 'g4',
+      'corra': 'g5',
+      'beata': 'g5',
+      'sandra': 'g6',
+      'sonia fr': 'g7',
+      'ray': 'g7',
+    };
+
+    if (!color || !VERTIKALNI_GROUPS[color]) {
+      return {
+        ok: false,
+        status: 400,
+        body: { error: "Vyberte prosím platnou látku/barvu ze vzorníku pro výpočet ceny." },
+      };
+    }
+
+    const groupKey = VERTIKALNI_GROUPS[color];
+    const tier = VERTIKALNI_PRICES.find(t => hR <= t.maxH) || VERTIKALNI_PRICES[VERTIKALNI_PRICES.length - 1];
+    const pricePerM2 = tier.prices[groupKey];
+    
+    // U vertikálních žaluzií se plocha počítá zadaná šířka a výška
+    // Někdy může být minimální účtovací plocha – pokud ano, aplikovat zde.
+    // Ceník neuvádí, předpokládáme čistou plochu:
+    const areaM2 = (wR * hR) / 1_000_000;
+    
+    const baseCatalog = Math.round(areaM2 * pricePerM2) + extraSurchargeFromFabricGroup;
+    let extraSurchargesTotal = 0;
+    
+    if (Array.isArray(body?.selected_extras_ids)) {
+      const productExtras = Array.isArray(product.extras) ? product.extras : [];
+      for (const ec of productExtras) {
+        if (body.selected_extras_ids.includes(ec.id)) {
+          extraSurchargesTotal += Number(ec.price) || 0;
+        }
+      }
+    }
+    
+    const total_czk = computeRetailCzk(baseCatalog, supplier, commission) + extraSurchargesTotal;
+    
+    return {
+      ok: true,
+      data: {
+        product_id: id,
+        product_title: productTitle,
+        width_mm: wR,
+        height_mm: hR,
+        rounded_width_mm: wR,
+        rounded_height_mm: hR,
+        area_m2: Math.round(areaM2 * 1_000_000) / 1_000_000,
+        price_per_m2_czk: pricePerM2,
+        base_catalog_czk: baseCatalog,
+        supplier_markup_percent: supplier,
+        commission_percent: commission,
+        total_czk,
+        source: "vertikalni_zaluzie",
+        pricing: `Kč/m² bez DPH (${pricePerM2} Kč/m²) podle výšky žaluzie a vybrané látky (${color.toUpperCase()}) × plocha.`,
+        prices_ex_vat: true,
+        vat_note: "Katalogové ceny jsou bez DPH (21 %).",
+        dimension_constraints: dim,
+      },
+    };
+  }
+
+  if (priceMode === "vertikalni_zaluzie_premium") {
+    const color = String(body.color || '').trim().toLowerCase();
+    
+    // prices per m2 per bracket
+    const VERTIKALNI_PREMIUM_PRICES = [
+      { maxH: 1500, prices: { g1: 952, g2: 1030, g3: 1095, g4: 1104, g5: 1147, g6: 1277 } },
+      { maxH: 2000, prices: { g1: 862, g2: 952, g3: 1019, g4: 1029, g5: 1095, g6: 1228 } },
+      { maxH: 2400, prices: { g1: 823, g2: 872, g3: 938, g4: 947, g5: 1042, g6: 1200 } },
+      { maxH: 3000, prices: { g1: 783, g2: 823, g3: 885, g4: 898, g5: 1004, g6: 1174 } },
+      { maxH: 4000, prices: { g1: 743, g2: 796, g3: 862, g4: 871, g5: 963, g6: 1122 } },
+      { maxH: 10000, prices: { g1: 718, g2: 768, g3: 835, g4: 846, g5: 938, g6: 1068 } },
+    ];
+    
+    const VERTIKALNI_PREMIUM_GROUPS: Record<string, keyof typeof VERTIKALNI_PREMIUM_PRICES[0]['prices']> = {
+      'vanesa': 'g1',
+      'viola': 'g1',
+      'aneta': 'g2',
+      'marina': 'g2',
+      'patricia': 'g3',
+      'peggi': 'g3',
+      'debra': 'g4',
+      'melissa bo': 'g4',
+      'tanya': 'g5',
+      'sharon': 'g6',
+    };
+
+    if (!color || !VERTIKALNI_PREMIUM_GROUPS[color]) {
+      return {
+        ok: false,
+        status: 400,
+        body: { error: "Vyberte prosím platnou prémiovou látku/barvu ze vzorníku pro výpočet ceny." },
+      };
+    }
+
+    const groupKey = VERTIKALNI_PREMIUM_GROUPS[color];
+    const tier = VERTIKALNI_PREMIUM_PRICES.find(t => hR <= t.maxH) || VERTIKALNI_PREMIUM_PRICES[VERTIKALNI_PREMIUM_PRICES.length - 1];
+    const pricePerM2 = tier.prices[groupKey];
+    
+    const areaM2 = (wR * hR) / 1_000_000;
+    
+    const baseCatalog = Math.round(areaM2 * pricePerM2) + extraSurchargeFromFabricGroup;
+    let extraSurchargesTotal = 0;
+    
+    if (Array.isArray(body?.selected_extras_ids)) {
+      const productExtras = Array.isArray(product.extras) ? product.extras : [];
+      for (const ec of productExtras) {
+        if (body.selected_extras_ids.includes(ec.id)) {
+          extraSurchargesTotal += Number(ec.price) || 0;
+        }
+      }
+    }
+    
+    const total_czk = computeRetailCzk(baseCatalog, supplier, commission) + extraSurchargesTotal;
+    
+    return {
+      ok: true,
+      data: {
+        product_id: id,
+        product_title: productTitle,
+        width_mm: wR,
+        height_mm: hR,
+        rounded_width_mm: wR,
+        rounded_height_mm: hR,
+        area_m2: Math.round(areaM2 * 1_000_000) / 1_000_000,
+        price_per_m2_czk: pricePerM2,
+        base_catalog_czk: baseCatalog,
+        supplier_markup_percent: supplier,
+        commission_percent: commission,
+        total_czk,
+        source: "vertikalni_zaluzie_premium",
+        pricing: `Kč/m² bez DPH (${pricePerM2} Kč/m²) podle výšky žaluzie a vybrané prémiové látky (${color.toUpperCase()}) × plocha.`,
+        prices_ex_vat: true,
+        vat_note: "Katalogové ceny jsou bez DPH (21 %).",
+        dimension_constraints: dim,
+      },
+    };
+  }
+
   if (priceMode === "m2_height_tiers") {
     const tierRes = await db.query(
       `SELECT * FROM "ProductHeightPriceTier"
@@ -241,7 +400,19 @@ export async function computeProductQuote(
     }
   }
 
-  // Přidáme příplatek za barvu/skupinu látek
+  // Přidáme procentuální příplatek ze skupiny látek, pokud používá nový konfigurátor
+  if (typeof body.fabric_group_config_index === 'number') {
+    const configs = Array.isArray(product.fabric_groups_config) ? product.fabric_groups_config : [];
+    const cfg = configs[body.fabric_group_config_index];
+    if (cfg && cfg.surcharge_percent > 0) {
+      const extraPercent = cfg.surcharge_percent / 100;
+      const extraCzk = Math.round(baseCatalogCzk * extraPercent);
+      baseCatalogCzk += extraCzk;
+      screenUnionCatalogNotes.push(`Látka "${cfg.name}": +${cfg.surcharge_percent}% (+${extraCzk} Kč).`);
+    }
+  }
+
+  // Přidáme fixní/m2 příplatek za barvu/skupinu látek (starší verze)
   if (extraSurchargeFromFabricGroup > 0) {
     baseCatalogCzk += Math.round(extraSurchargeFromFabricGroup);
     screenUnionCatalogNotes.push(`Příplatek za vybranou barvu/látku z ceníku: +${Math.round(extraSurchargeFromFabricGroup)} Kč.`);

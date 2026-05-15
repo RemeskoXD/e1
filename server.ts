@@ -145,6 +145,7 @@ async function ensureSchema(db: Pool) {
     `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS validation_profile VARCHAR(32)`,
     `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS hidden BOOLEAN DEFAULT FALSE`,
     `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS gallery JSONB DEFAULT '[]'::jsonb`,
+    `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS colors JSONB DEFAULT '[]'::jsonb`,
     `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS extras JSONB DEFAULT '[]'::jsonb`,
   ]) {
     await db.query(sql).catch(() => {});
@@ -1035,10 +1036,12 @@ async function startServer() {
         const validation_profile_ins = optStrCol(bodyRec, "validation_profile");
         const hidden_ins = Boolean(bodyRec.hidden);
         const gallery_ins = JSON.stringify(Array.isArray(bodyRec.gallery) ? bodyRec.gallery : []);
+        const colors_ins = JSON.stringify(Array.isArray(bodyRec.colors) ? bodyRec.colors : []);
+        const fabric_groups_config_ins = JSON.stringify(Array.isArray(bodyRec.fabric_groups_config) ? bodyRec.fabric_groups_config : null);
         const result = await db.query(
           `INSERT INTO "Product" (title, category, price, "oldPrice", badge, img, "desc", supplier_markup_percent, commission_percent,
-            width_mm_min, width_mm_max, height_mm_min, height_mm_max, max_area_m2, price_mode, fabric_group, validation_profile, hidden, gallery)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING *`,
+            width_mm_min, width_mm_max, height_mm_min, height_mm_max, max_area_m2, price_mode, fabric_group, validation_profile, hidden, gallery, colors, fabric_groups_config)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21) RETURNING *`,
           [
             title,
             category,
@@ -1059,6 +1062,8 @@ async function startServer() {
             validation_profile_ins,
             hidden_ins,
             gallery_ins,
+            colors_ins,
+            fabric_groups_config_ins,
           ]
         );
         res.json(mapProductRow(result.rows[0] as Record<string, unknown>));
@@ -1094,11 +1099,13 @@ async function startServer() {
         const validation_profile_upd = optStrCol(bodyRec, "validation_profile");
         const hidden_upd = Boolean(bodyRec.hidden);
         const gallery_upd = JSON.stringify(Array.isArray(bodyRec.gallery) ? bodyRec.gallery : []);
+        const colors_upd = JSON.stringify(Array.isArray(bodyRec.colors) ? bodyRec.colors : []);
+        const fabric_groups_config_upd = JSON.stringify(Array.isArray(bodyRec.fabric_groups_config) ? bodyRec.fabric_groups_config : null);
         const result = await db.query(
           `UPDATE "Product" SET title=$1, category=$2, price=$3, "oldPrice"=$4, badge=$5, img=$6, "desc"=$7,
             supplier_markup_percent=$9, commission_percent=$10,
             width_mm_min=$11, width_mm_max=$12, height_mm_min=$13, height_mm_max=$14, max_area_m2=$15,
-            price_mode=$16, fabric_group=$17, validation_profile=$18, hidden=$19, gallery=$20
+            price_mode=$16, fabric_group=$17, validation_profile=$18, hidden=$19, gallery=$20, colors=$21, fabric_groups_config=$22
            WHERE id=$8 RETURNING *`,
           [
             title,
@@ -1121,6 +1128,8 @@ async function startServer() {
             validation_profile_upd,
             hidden_upd,
             gallery_upd,
+            colors_upd,
+            fabric_groups_config_upd,
           ]
         );
         if (!result.rows[0]) {

@@ -88,7 +88,9 @@ export function mapProductRow(row: Record<string, unknown>) {
     validation_profile: optStrCol(row, "validation_profile"),
     hidden: Boolean(row.hidden),
     gallery: Array.isArray(row.gallery) ? row.gallery : [],
+    colors: Array.isArray(row.colors) ? row.colors : [],
     extras: Array.isArray(row.extras) ? row.extras : [],
+    fabric_groups_config: Array.isArray(row.fabric_groups_config) ? row.fabric_groups_config : [],
   };
 }
 
