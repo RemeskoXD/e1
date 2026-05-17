@@ -400,15 +400,20 @@ export async function computeProductQuote(
     }
   }
 
-  // Přidáme procentuální příplatek ze skupiny látek, pokud používá nový konfigurátor
+  // Přidáme příplatek ze skupiny látek, pokud používá nový konfigurátor
   if (typeof body.fabric_group_config_index === 'number') {
     const configs = Array.isArray(product.fabric_groups_config) ? product.fabric_groups_config : [];
     const cfg = configs[body.fabric_group_config_index];
-    if (cfg && cfg.surcharge_percent > 0) {
-      const extraPercent = cfg.surcharge_percent / 100;
-      const extraCzk = Math.round(baseCatalogCzk * extraPercent);
-      baseCatalogCzk += extraCzk;
-      screenUnionCatalogNotes.push(`Látka "${cfg.name}": +${cfg.surcharge_percent}% (+${extraCzk} Kč).`);
+    if (cfg) {
+      if (typeof cfg.surcharge === 'number' && cfg.surcharge > 0) {
+        baseCatalogCzk += cfg.surcharge;
+        screenUnionCatalogNotes.push(`Látka "${cfg.name}": +${cfg.surcharge} Kč.`);
+      } else if (typeof cfg.surcharge_percent === 'number' && cfg.surcharge_percent > 0) {
+        const extraPercent = cfg.surcharge_percent / 100;
+        const extraCzk = Math.round(baseCatalogCzk * extraPercent);
+        baseCatalogCzk += extraCzk;
+        screenUnionCatalogNotes.push(`Látka "${cfg.name}": +${cfg.surcharge_percent}% (+${extraCzk} Kč).`);
+      }
     }
   }
 

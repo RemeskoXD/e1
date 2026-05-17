@@ -1,5 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { Plus, Search, Edit2, Trash2, Terminal, ChevronDown, ChevronRight, X, ExternalLink, Table, Image as ImageIcon } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Terminal, ChevronDown, ChevronRight, X, ExternalLink, Table, Image as ImageIcon, Upload } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { computeDisplayPriceCzk, formatCzk, toMoneyNumber } from '../../lib/money';
 import { CENIK_IMPORT_COMMANDS } from '../../lib/cenikImportCommands';
 import RichTextEditor from '../../components/RichTextEditor';
@@ -17,7 +18,8 @@ interface DimConstraints {
 
 export interface FabricGroupConfigItem {
   name: string;
-  surcharge_percent: number;
+  surcharge: number;
+  surcharge_percent?: number; // legacy
   colors: { name: string; img?: string }[];
 }
 
@@ -253,7 +255,7 @@ export default function AdminProducts() {
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     const token = localStorage.getItem('adminToken');
-    if (!token) return alert('No admin token');
+    if (!token) return toast.error('No admin token');
 
     try {
       const url = editingId ? `/api/admin/products/${editingId}` : '/api/admin/products';
@@ -301,17 +303,17 @@ export default function AdminProducts() {
         } catch {
           /* ignore */
         }
-        alert(msg);
+        toast.error(msg);
       }
     } catch {
-      alert('Chyba serveru');
+      toast.error('Chyba serveru');
     }
   };
 
   const handleDelete = async (id: string | number) => {
     if (!confirm('Opravdu smazat tento produkt?')) return;
     const token = localStorage.getItem('adminToken');
-    if (!token) return alert('No admin token');
+    if (!token) return toast.error('No admin token');
 
     try {
       const res = await fetch(`/api/admin/products/${id}`, {
@@ -321,10 +323,10 @@ export default function AdminProducts() {
       if (res.ok) {
         fetchProducts();
       } else {
-        alert('Chyba při mazání');
+        toast.error('Chyba při mazání');
       }
     } catch {
-      alert('Chyba serveru');
+      toast.error('Chyba serveru');
     }
   };
 
@@ -354,7 +356,7 @@ export default function AdminProducts() {
       });
       if (res.ok) successCount++;
     }
-    alert(`Smazáno ${successCount} z ${selectedIds.size} produktů.`);
+    toast.success(`Smazáno ${successCount} z ${selectedIds.size} produktů.`);
     setSelectedIds(new Set());
     fetchData();
   };
@@ -391,7 +393,7 @@ export default function AdminProducts() {
       });
       if (res.ok) successCount++;
     }
-    alert(`Změněno ${successCount} z ${selectedIds.size} produktů.`);
+    toast.success(`Změněno ${successCount} z ${selectedIds.size} produktů.`);
     setSelectedIds(new Set());
     fetchData();
   };
@@ -757,7 +759,7 @@ export default function AdminProducts() {
                             setFormData(prev => ({ ...prev, img: url }));
                           } catch (err) {
                             console.error(err);
-                            alert("Chyba při nahrávání obrázku.");
+                            toast.error("Chyba při nahrávání obrázku.");
                           }
                         }}
                       />
@@ -797,7 +799,7 @@ export default function AdminProducts() {
                             setFormData(prev => ({ ...prev, gallery: [...(prev.gallery || []), ...urls] }));
                           } catch (err) {
                             console.error(err);
-                            alert("Chyba při nahrávání obrázků.");
+                            toast.error("Chyba při nahrávání obrázků.");
                           }
                         }}
                       />
@@ -843,7 +845,7 @@ export default function AdminProducts() {
                               setFormData(p => ({ 
                                 ...p, 
                                 colors: [], 
-                                fabric_groups_config: [{ name: 'Skupina látek 1', surcharge_percent: 0, colors: [] }] 
+                                fabric_groups_config: [{ name: 'Skupina látek 1', surcharge: 0, colors: [] }] 
                               }));
                             }
                          }}
@@ -870,10 +872,79 @@ export default function AdminProducts() {
                         const cImg = typeof colorObj === 'string' ? undefined : colorObj.img;
                         return (
                           <div key={idx} className="flex items-center gap-3 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-sm group">
-                            {cImg && (
-                              <img src={cImg} alt={cName} className="w-10 h-10 object-cover rounded shadow-sm" />
+                            {cImg ? (
+                              <label className="cursor-pointer group/img relative">
+                                <img src={cImg} alt={cName} className="w-10 h-10 object-cover rounded shadow-sm" />
+                                <div className="absolute inset-0 bg-black/40 hidden group-hover/img:flex items-center justify-center rounded">
+                                  <Upload size={12} className="text-white" />
+                                </div>
+                                <input 
+                                  type="file" 
+                                  className="hidden" 
+                                  accept="image/*" 
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      try {
+                                        const newUrl = await uploadImage(file);
+                                        const newColors = [...(formData.colors || [])];
+                                        const current = newColors[idx];
+                                        if (typeof current === 'string') {
+                                          newColors[idx] = { name: current, img: newUrl } as any;
+                                        } else {
+                                          newColors[idx] = { ...(current as any), img: newUrl } as any;
+                                        }
+                                        setFormData(p => ({ ...p, colors: newColors }));
+                                      } catch (err) {
+                                        alert("Chyba při nahrávání.");
+                                      }
+                                    }
+                                  }} 
+                                />
+                              </label>
+                            ) : (
+                              <label className="cursor-pointer bg-gray-200 w-10 h-10 rounded shadow-sm flex items-center justify-center hover:bg-gray-300 transition-colors">
+                                <Upload size={14} className="text-gray-500" />
+                                <input 
+                                  type="file" 
+                                  className="hidden" 
+                                  accept="image/*" 
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      try {
+                                        const newUrl = await uploadImage(file);
+                                        const newColors = [...(formData.colors || [])];
+                                        const current = newColors[idx];
+                                        if (typeof current === 'string') {
+                                          newColors[idx] = { name: current, img: newUrl } as any;
+                                        } else {
+                                          newColors[idx] = { ...(current as any), img: newUrl } as any;
+                                        }
+                                        setFormData(p => ({ ...p, colors: newColors }));
+                                      } catch (err) {
+                                        alert("Chyba při nahrávání.");
+                                      }
+                                    }
+                                  }} 
+                                />
+                              </label>
                             )}
-                            <span className="font-semibold text-gray-800">{cName}</span>
+                            <input 
+                              type="text"
+                              value={cName}
+                              onChange={(e) => {
+                                const newColors = [...(formData.colors || [])];
+                                const current = newColors[idx];
+                                if (typeof current === 'string') {
+                                  newColors[idx] = e.target.value as any;
+                                } else {
+                                  newColors[idx] = { ...(current as any), name: e.target.value } as any;
+                                }
+                                setFormData(p => ({ ...p, colors: newColors }));
+                              }}
+                              className="font-semibold text-gray-800 bg-transparent border-b border-transparent focus:border-gray-300 focus:outline-none flex-1"
+                            />
                             <button
                               type="button"
                               onClick={() => setFormData(p => ({ ...p, colors: p.colors?.filter((_, i) => i !== idx) }))}
@@ -919,7 +990,7 @@ export default function AdminProducts() {
                           const nameInput = document.getElementById('newColorInput') as HTMLInputElement;
                           const fileInput = document.getElementById('newColorFileInput') as HTMLInputElement;
                           const nameVal = nameInput.value.trim();
-                          if (!nameVal) return alert('Zadejte název barvy nebo dekoru.');
+                          if (!nameVal) return toast.error('Zadejte název barvy nebo dekoru.');
                           
                           let fileUrl = undefined;
                           const file = fileInput.files?.[0];
@@ -934,7 +1005,7 @@ export default function AdminProducts() {
                               btn.disabled = false;
                             } catch (err) {
                               console.error(err);
-                              alert("Chyba při nahrávání obrázku barvy.");
+                              toast.error("Chyba při nahrávání obrázku barvy.");
                               return;
                             }
                           }
@@ -991,13 +1062,14 @@ export default function AdminProducts() {
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-semibold text-gray-600 mb-1">Příplatek (%)</label>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1">Příplatek (Kč)</label>
                             <input
                               type="number"
-                              value={group.surcharge_percent}
+                              value={group.surcharge ?? group.surcharge_percent ?? 0}
                               onChange={(e) => {
                                 const newConfig = [...(formData.fabric_groups_config || [])];
-                                newConfig[grpIdx].surcharge_percent = Number(e.target.value);
+                                newConfig[grpIdx].surcharge = Number(e.target.value);
+                                newConfig[grpIdx].surcharge_percent = undefined; // clear legacy
                                 setFormData(p => ({ ...p, fabric_groups_config: newConfig }));
                               }}
                               className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-200 rounded-lg focus:ring-[#CCAD8A]"
@@ -1011,8 +1083,64 @@ export default function AdminProducts() {
                           <div className="flex flex-wrap gap-2 mb-3">
                             {group.colors.map((c, cIdx) => (
                               <div key={cIdx} className="flex items-center gap-2 bg-gray-50 border border-gray-200 px-2 py-1 rounded-md text-xs">
-                                {c.img && <img src={c.img} alt={c.name} className="w-6 h-6 object-cover rounded" />}
-                                <span className="font-medium text-gray-800">{c.name}</span>
+                                {c.img ? (
+                                  <label className="cursor-pointer group/img relative">
+                                    <img src={c.img} alt={c.name} className="w-6 h-6 object-cover rounded" />
+                                    <div className="absolute inset-0 bg-black/40 hidden group-hover/img:flex items-center justify-center rounded">
+                                      <Upload size={10} className="text-white" />
+                                    </div>
+                                    <input 
+                                      type="file" 
+                                      className="hidden" 
+                                      accept="image/*" 
+                                      onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                          try {
+                                            const newUrl = await uploadImage(file);
+                                            const newConfig = [...(formData.fabric_groups_config || [])];
+                                            newConfig[grpIdx].colors[cIdx].img = newUrl;
+                                            setFormData(p => ({ ...p, fabric_groups_config: newConfig }));
+                                          } catch (err) {
+                                            alert("Chyba při nahrávání.");
+                                          }
+                                        }
+                                      }} 
+                                    />
+                                  </label>
+                                ) : (
+                                  <label className="cursor-pointer bg-gray-200 w-6 h-6 rounded flex items-center justify-center hover:bg-gray-300 transition-colors">
+                                    <Upload size={10} className="text-gray-500" />
+                                    <input 
+                                      type="file" 
+                                      className="hidden" 
+                                      accept="image/*" 
+                                      onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                          try {
+                                            const newUrl = await uploadImage(file);
+                                            const newConfig = [...(formData.fabric_groups_config || [])];
+                                            newConfig[grpIdx].colors[cIdx].img = newUrl;
+                                            setFormData(p => ({ ...p, fabric_groups_config: newConfig }));
+                                          } catch (err) {
+                                            alert("Chyba při nahrávání.");
+                                          }
+                                        }
+                                      }} 
+                                    />
+                                  </label>
+                                )}
+                                <input
+                                  type="text"
+                                  value={c.name}
+                                  onChange={(e) => {
+                                    const newConfig = [...(formData.fabric_groups_config || [])];
+                                    newConfig[grpIdx].colors[cIdx].name = e.target.value;
+                                    setFormData(p => ({ ...p, fabric_groups_config: newConfig }));
+                                  }}
+                                  className="font-medium text-gray-800 bg-transparent border-b border-transparent focus:border-gray-300 focus:outline-none w-24"
+                                />
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -1056,7 +1184,7 @@ export default function AdminProducts() {
                                 const nameInput = document.getElementById(`newColorName_grp_${grpIdx}`) as HTMLInputElement;
                                 const fileInput = document.getElementById(`newColorFile_grp_${grpIdx}`) as HTMLInputElement;
                                 const nameVal = nameInput.value.trim();
-                                if (!nameVal) return alert('Zadejte název.');
+                                if (!nameVal) return toast.error('Zadejte název.');
                                 
                                 let fileUrl = undefined;
                                 const file = fileInput.files?.[0];
@@ -1070,7 +1198,7 @@ export default function AdminProducts() {
                                     btn.textContent = pt;
                                     btn.disabled = false;
                                   } catch (err) {
-                                    alert('Chyba nahrávání');
+                                    toast.error('Chyba nahrávání');
                                     return;
                                   }
                                 }
@@ -1097,7 +1225,7 @@ export default function AdminProducts() {
                     type="button"
                     onClick={() => setFormData(p => ({
                       ...p,
-                      fabric_groups_config: [...(p.fabric_groups_config || []), { name: 'Nová skupina', surcharge_percent: 0, colors: [] }]
+                      fabric_groups_config: [...(p.fabric_groups_config || []), { name: 'Nová skupina', surcharge: 0, colors: [] }]
                     }))}
                     className="mt-3 px-4 py-2 bg-gray-100 text-gray-700 text-sm font-semibold rounded-lg border border-gray-200 hover:bg-gray-200 inline-flex items-center gap-2"
                   >

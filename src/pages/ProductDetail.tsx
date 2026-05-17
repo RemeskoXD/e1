@@ -25,7 +25,8 @@ type Product = {
   extras?: { id: string; name: string; price: number }[];
   fabric_groups_config?: {
     name: string;
-    surcharge_percent: number;
+    surcharge?: number;
+    surcharge_percent?: number; // legacy
     colors: { name: string; img?: string }[];
   }[] | null;
 };
@@ -466,15 +467,15 @@ export default function ProductDetail({ productId }: { productId: string }) {
                         >
                           <div className="flex items-center gap-2">
                             <span>{g.name}</span>
-                            {g.surcharge_percent > 0 && (
+                            {(g.surcharge || g.surcharge_percent) ? (
                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider ${
                                 selectedFabricGroupConfigIndex === idx 
                                   ? 'bg-[#CCAD8A]/20 text-[#CCAD8A]' 
                                   : 'bg-gray-100 text-gray-500'
                               }`}>
-                                +{g.surcharge_percent} %
+                                {g.surcharge ? `+${g.surcharge} Kč` : `+${g.surcharge_percent} %`}
                               </span>
-                            )}
+                            ) : null}
                           </div>
                         </button>
                       ))}

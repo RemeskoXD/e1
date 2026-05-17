@@ -15,6 +15,7 @@ import LegalCookies from './pages/LegalCookies';
 import LegalWithdrawal from './pages/LegalWithdrawal';
 import { CartProvider, useCart } from './context/CartContext';
 
+import { Toaster } from 'react-hot-toast';
 import AdminLayout from './components/admin/AdminLayout';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminProducts from './pages/admin/AdminProducts';
@@ -85,6 +86,7 @@ export default function App() {
   if (isAdmin) {
     return (
       <HelmetProvider>
+        <Toaster position="top-right" />
         <AdminLayout currentPath={currentPath}>
           {adminOrderId != null ? (
             <AdminOrderDetail orderId={adminOrderId} />
@@ -108,6 +110,7 @@ export default function App() {
 
   return (
     <HelmetProvider>
+      <Toaster position="top-right" />
       <CartProvider>
         <StorefrontRoutes currentPath={currentPath} />
       </CartProvider>

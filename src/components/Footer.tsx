@@ -127,7 +127,7 @@ export default function Footer() {
                 </div>
                 <div className="flex items-center gap-3">
                   <MapPin size={16} className="text-[#CCAD8A]" />
-                  <span>Doručíme i namontujeme v ČR</span>
+                  <span>Doručení po celé ČR</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <CreditCard size={16} className="text-[#CCAD8A]" />
